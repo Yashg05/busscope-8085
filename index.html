@@ -1,0 +1,1382 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>BusScope 8085</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: logic-analyzer workbench. Left rail = program + machine state, right = waveform, trace, analysis. */
+:root {
+  --bg: #EDF0EC; --panel: #FAFBF9; --fg: #18221F; --muted: #596A64; --line: #D2D9D4; --grid: #DDE4DF;
+  --accent: #0E6B5C; --accent-fg: #FFFFFF; --trace: #1B2925; --busfill: #E1EBE6; --hl: #C4560A;
+  --of: #2A6AA2; --mr: #2E8756; --mw: #C4560A; --io: #7F52A3; --bi: #6F7C77; --err: #A62F2F; --sel: #DCEBE5;
+  --f-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-head: 'IBM Plex Sans Condensed', 'IBM Plex Sans', system-ui, sans-serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1513; --panel: #151E1B; --fg: #E2EBE7; --muted: #8DA09A; --line: #27342F; --grid: #202C28;
+    --accent: #4DC2AC; --accent-fg: #06120F; --trace: #CCDED7; --busfill: #1D2A26; --hl: #F08A3C;
+    --of: #5CA1DB; --mr: #5BC489; --mw: #F08A3C; --io: #B68BDB; --bi: #899792; --err: #FF8A80; --sel: #1E2E29;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1513; --panel: #151E1B; --fg: #E2EBE7; --muted: #8DA09A; --line: #27342F; --grid: #202C28;
+  --accent: #4DC2AC; --accent-fg: #06120F; --trace: #CCDED7; --busfill: #1D2A26; --hl: #F08A3C;
+  --of: #5CA1DB; --mr: #5BC489; --mw: #F08A3C; --io: #B68BDB; --bi: #899792; --err: #FF8A80; --sel: #1E2E29;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 14px; line-height: 1.5; margin: 0;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 40px; }
+.wrap { max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1, h2, h3 { font-family: var(--f-head); font-weight: 600; margin: 0; letter-spacing: .01em; }
+h1 { font-size: 26px; line-height: 1.1; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); }
+h3 { font-size: 16px; }
+.mono { font-family: var(--f-mono); }
+.ov { text-decoration: overline; }
+button, select, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: end; gap: 14px 28px; justify-content: space-between; }
+.brand p { margin: 4px 0 0; color: var(--muted); max-width: 52ch; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); flex: none; min-width: 0; }
+.tab { background: none; border: 0; padding: 9px 14px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+.tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+.clk { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.clk input { width: 74px; }
+
+input[type="number"], input[type="text"], select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+.btn { background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 6px; padding: 8px 14px; font-weight: 600; cursor: pointer; }
+.btn.alt { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 500; }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.grid { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0; }
+.card > header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; margin-bottom: 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+textarea.code { width: 100%; min-height: 300px; resize: vertical; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.55;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px; tab-size: 8; white-space: pre; overflow: auto; }
+.msg { font-size: 13px; margin-top: 8px; min-height: 1.4em; }
+.msg.err { color: var(--err); } .msg.ok { color: var(--muted); }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.metric { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.metric b { display: block; font-family: var(--f-mono); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.metric span { color: var(--muted); font-size: 12px; }
+
+.scope { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.scope svg { display: block; }
+.sv-label { font-family: var(--f-mono); font-size: 12px; fill: var(--fg); }
+.sv-t { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+.sv-band { font-family: var(--f-ui); font-size: 11.5px; font-weight: 600; fill: #fff; }
+.sv-bus { font-family: var(--f-mono); font-size: 11px; fill: var(--fg); }
+.sv-z { font-family: var(--f-mono); font-size: 9.5px; fill: var(--muted); }
+.tr { fill: none; stroke: var(--trace); stroke-width: 1.6; stroke-linejoin: round; }
+.tr.act { stroke: var(--hl); }
+.busp { fill: var(--busfill); stroke: var(--trace); stroke-width: 1.2; }
+.zline { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.gl { stroke: var(--grid); stroke-width: 1; }
+.gl.m { stroke: var(--muted); stroke-width: 1.2; }
+.actbg { fill: var(--hl); opacity: .13; }
+.xbg { fill: url(#hatch); }
+
+.nav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.nav .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+.mcs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 12px; }
+.mc { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; border-top: 3px solid var(--c, var(--bi)); }
+.mc h3 { font-size: 14px; margin-bottom: 4px; }
+.mc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.mc li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 6px; }
+.mc li b { font-family: var(--f-mono); font-weight: 500; color: var(--muted); }
+
+.tracebox { max-height: 330px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 9px; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel); font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-bottom: 1px solid var(--line); z-index: 1; }
+td { border-bottom: 1px solid var(--grid); font-family: var(--f-mono); font-size: 12.5px; }
+td.r, th.r { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--sel); }
+tbody tr[aria-selected="true"] { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }
+.chip { display: inline-block; min-width: 22px; text-align: center; padding: 0 4px; margin-right: 3px; border-radius: 3px; color: #fff; font-size: 11px; line-height: 17px; background: var(--c, var(--bi)); }
+.t-OF { --c: var(--of); } .t-MR { --c: var(--mr); } .t-MW { --c: var(--mw); } .t-IOR, .t-IOW { --c: var(--io); } .t-BI { --c: var(--bi); }
+
+.regs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.reg { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--bg); }
+.reg span { display: block; color: var(--muted); font-size: 11px; }
+.reg b { font-family: var(--f-mono); font-weight: 500; font-size: 15px; }
+.reg.ch { border-color: var(--accent); } .reg.ch b { color: var(--accent); }
+.reg.w2 { grid-column: span 2; }
+.flags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.flag { font-family: var(--f-mono); font-size: 12px; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; color: var(--muted); }
+.flag.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.mem { overflow-x: auto; }
+.mem table td, .mem table th { padding: 2px 5px; font-size: 12px; }
+.mem td.w { color: var(--hl); font-weight: 500; }
+.mem td.a { color: var(--muted); }
+
+.mixbar { display: flex; height: 22px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.mixbar i { display: block; height: 100%; background: var(--c); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--c); margin-right: 6px; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cmp td, .cmp th { font-family: var(--f-ui); font-size: 13px; }
+.cmp td.n { font-family: var(--f-mono); text-align: right; }
+.verdict { font-size: 15px; margin: 4px 0 0; }
+.about { max-width: 78ch; display: flex; flex-direction: column; gap: 12px; }
+.about p, .about ul { margin: 0; } .about ul { padding-left: 20px; }
+.about h2 { margin-top: 10px; }
+.note { color: var(--muted); font-size: 12.5px; }
+[hidden] { display: none !important; }
+@media (max-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); } .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .regs { grid-template-columns: repeat(3, minmax(0, 1fr)); } h1 { font-size: 23px; } }
+/* hardware conditions, circuit view, quiz */
+.hw { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; align-items: center; }
+.hw label { color: var(--muted); }
+.hw input[type="range"] { width: 100%; accent-color: var(--accent); }
+.hw .full { grid-column: 1 / -1; margin: 0; }
+.banner { margin-top: 10px; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--hl); background: color-mix(in srgb, var(--hl) 10%, var(--panel)); font-size: 13px; }
+.banner.bad { border-color: var(--err); background: color-mix(in srgb, var(--err) 10%, var(--panel)); }
+.blockhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 16px 0 8px; }
+.blockhead .nav { margin-left: auto; }
+.blockbox { border: 1px solid var(--line); border-radius: 6px; background: var(--bg); padding: 8px; overflow-x: auto; }
+.blockbox svg { display: block; margin: 0 auto; min-width: 560px; }
+.tcur { fill: var(--accent); opacity: .13; pointer-events: none; }
+.busp.bad { stroke: var(--err); fill: color-mix(in srgb, var(--err) 20%, var(--busfill)); }
+.sv-bus.bad { fill: var(--err); font-weight: 600; }
+.badtxt { color: var(--err); fill: var(--err); font-weight: 600; }
+tr.flt td:first-child { box-shadow: inset 3px 0 0 var(--err); }
+tr.flt td { color: var(--err); }
+.bk { fill: var(--panel); stroke: var(--muted); stroke-width: 1.4; }
+.bk-h { font-family: var(--f-head); font-weight: 600; font-size: 14px; fill: var(--fg); }
+.bk-s { font-family: var(--f-ui); font-size: 11.5px; fill: var(--muted); }
+.bk-p { font-family: var(--f-mono); font-size: 10.5px; fill: var(--muted); }
+.bk-v { font-family: var(--f-mono); font-size: 11.5px; fill: var(--fg); }
+.bk-v.hot { fill: var(--hl); font-weight: 500; }
+.bk-big { font-family: var(--f-mono); font-size: 30px; font-weight: 500; fill: var(--accent); }
+.wire { fill: none; stroke: var(--line); stroke-width: 2.4; }
+.wire.on { stroke: var(--accent); stroke-dasharray: 8 5; animation: flow .7s linear infinite; }
+.wire.hot { stroke: var(--hl); stroke-dasharray: 8 5; animation: flow .7s linear infinite; }
+.arrow { fill: var(--accent); } .arrow.hot { fill: var(--hl); }
+@keyframes flow { to { stroke-dashoffset: -13; } }
+@media (prefers-reduced-motion: reduce) { .wire.on, .wire.hot { animation: none; } }
+.quizq { font-size: 16px; margin: 0 0 12px; max-width: 70ch; }
+.qopts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 14px 0 4px; }
+.qopt { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; cursor: pointer; font-family: var(--f-mono); font-size: 14px; text-align: left; }
+.qopt:hover:not(:disabled) { border-color: var(--accent); }
+.qopt:disabled { cursor: default; }
+.qopt.right { border-color: var(--mr); background: color-mix(in srgb, var(--mr) 16%, var(--panel)); }
+.qopt.wrong { border-color: var(--err); background: color-mix(in srgb, var(--err) 14%, var(--panel)); }
+</style>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>BusScope 8085</h1>
+      <p>Write 8085 assembly, run it, and see every machine cycle and T-state as a bus timing diagram.</p>
+    </div>
+    <div class="clk"><label for="mhz">CPU clock</label><input id="mhz" type="number" min="0.1" max="20" step="0.1" value="3"><span>MHz</span></div>
+  </header>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button class="tab" role="tab" id="tabTrace" aria-selected="true" aria-controls="viewTrace">Bus timing</button>
+    <button class="tab" role="tab" id="tabCompare" aria-selected="false" aria-controls="viewCompare">Compare two programs</button>
+    <button class="tab" role="tab" id="tabQuiz" aria-selected="false" aria-controls="viewQuiz">Viva quiz</button>
+    <button class="tab" role="tab" id="tabAbout" aria-selected="false" aria-controls="viewAbout">About and method</button>
+  </nav>
+
+  <section id="viewTrace" role="tabpanel" aria-labelledby="tabTrace">
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <header><h2>Program</h2>
+            <select id="exSel" aria-label="Example program"></select>
+          </header>
+          <textarea id="src" class="code" spellcheck="false" aria-label="8085 assembly source"></textarea>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="runBtn">Assemble and run</button>
+            <label class="row" style="gap:6px;color:var(--muted)" for="inVal">IN returns <input id="inVal" type="text" value="5AH" size="5" class="mono" style="width:70px"></label>
+          </div>
+          <div id="msg" class="msg ok" role="status"></div>
+        </div>
+        <div class="card">
+          <header><h2>Hardware conditions</h2></header>
+          <div class="hw">
+            <label for="waits">Memory delay</label>
+            <div class="row" style="flex-wrap:nowrap"><input id="waits" type="range" min="0" max="3" step="1" value="0"><span id="waitsOut" class="note mono" style="min-width:9ch">0 wait</span></div>
+            <p id="waitsNote" class="note full"></p>
+            <label for="fault">Bus fault</label>
+            <select id="fault" aria-label="Inject a data bus fault"></select>
+            <p id="faultNote" class="note full"></p>
+          </div>
+        </div>
+        <div class="card">
+          <header><h2>Machine state</h2><span id="stateAt" class="note mono"></span></header>
+          <div id="regs" class="regs"></div>
+          <div id="flags" class="flags"></div>
+        </div>
+        <div class="card">
+          <header><h2>Memory</h2>
+            <label class="row" style="gap:6px;color:var(--muted)" for="memAddr">from <input id="memAddr" type="text" value="2000H" class="mono" style="width:76px"></label>
+          </header>
+          <div id="memBox" class="mem"></div>
+          <div id="outBox" class="note" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <div id="metrics" class="metrics"></div>
+        <div class="card">
+          <header>
+            <h3 id="diagTitle">Timing diagram</h3>
+            <span id="diagSub" class="note mono"></span>
+          </header>
+          <div class="nav" style="margin-bottom:10px">
+            <button class="btn alt" id="bFirst" aria-label="First instruction">&#x23EE;</button>
+            <button class="btn alt" id="bPrev" aria-label="Previous instruction">&larr; Prev</button>
+            <button class="btn alt" id="bNext" aria-label="Next instruction">Next &rarr;</button>
+            <button class="btn alt" id="bLast" aria-label="Last instruction">&#x23ED;</button>
+            <span class="hint">Arrow keys also step. Click any row below.</span>
+          </div>
+          <div class="scope" id="scope"></div>
+          <div id="hwBanner" class="banner" hidden></div>
+          <div class="blockhead">
+            <h3>Circuit view</h3><span id="tsLabel" class="note mono"></span>
+            <div class="nav">
+              <button class="btn alt" id="tPrev" aria-label="Previous T-state">&larr; T</button>
+              <button class="btn alt" id="tNext" aria-label="Next T-state">T &rarr;</button>
+              <button class="btn alt" id="tPlay" aria-label="Play through the T-states">&#9654; Play</button>
+            </div>
+          </div>
+          <div id="blockBox" class="blockbox"></div>
+          <div id="mcs" class="mcs"></div>
+        </div>
+        <div class="card">
+          <header><h2>Executed instructions</h2><span id="traceNote" class="note"></span></header>
+          <div class="tracebox"><table>
+            <thead><tr><th class="r">#</th><th>Addr</th><th>Instruction</th><th>Bytes</th><th>Cycles</th><th class="r">T</th><th class="r">Time</th></tr></thead>
+            <tbody id="traceBody"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <header><h2>Where the time goes</h2><span id="mixNote" class="note"></span></header>
+          <div id="mixBar" class="mixbar"></div>
+          <div id="legend" class="legend"></div>
+          <div style="overflow-x:auto;margin-top:12px"><table class="cmp">
+            <thead><tr><th>Instruction</th><th class="r">Runs</th><th class="r">T-states</th><th class="r">Share</th></tr></thead>
+            <tbody id="topBody"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="viewCompare" role="tabpanel" aria-labelledby="tabCompare" hidden>
+    <div class="col">
+      <div class="card">
+        <header><h2>Two versions, same job</h2>
+          <div class="row"><select id="pairSel" aria-label="Example pair"></select><button class="btn" id="cmpRun">Compare</button></div>
+        </header>
+        <div class="two">
+          <div><h3 style="margin-bottom:6px">Program A</h3><textarea id="progA" class="code" spellcheck="false" aria-label="Program A"></textarea></div>
+          <div><h3 style="margin-bottom:6px">Program B</h3><textarea id="progB" class="code" spellcheck="false" aria-label="Program B"></textarea></div>
+        </div>
+        <div id="cmpMsg" class="msg ok" role="status"></div>
+      </div>
+      <div id="cmpOut"></div>
+    </div>
+  </section>
+
+  <section id="viewQuiz" role="tabpanel" aria-labelledby="tabQuiz" hidden>
+    <div class="card">
+      <header><h2>Viva quiz</h2><span id="quizScore" class="note mono"></span></header>
+      <p id="quizQ" class="quizq"></p>
+      <div class="scope" id="quizScope"></div>
+      <div id="quizOpts" class="qopts"></div>
+      <div id="quizFb" class="msg" role="status" aria-live="polite"></div>
+      <div class="row"><button class="btn" id="quizNext">Next question</button><span class="note">Random waveforms on ideal hardware. Faults and wait states are not applied here.</span></div>
+    </div>
+  </section>
+
+  <section id="viewAbout" role="tabpanel" aria-labelledby="tabAbout" hidden>
+    <div class="card about" id="aboutBox"></div>
+  </section>
+</div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" style="stroke:var(--muted);stroke-width:1.2;opacity:.55"/></pattern>
+</defs></svg>
+<script>
+/* BusScope 8085 core: assembler + machine-cycle simulator */
+var REG = { B: 0, C: 1, D: 2, E: 3, H: 4, L: 5, M: 6, A: 7 };
+var RN = ['B', 'C', 'D', 'E', 'H', 'L', 'M', 'A'];
+var RPS = ['B', 'D', 'H', 'SP'];
+var RPP = ['B', 'D', 'H', 'PSW'];
+var CCN = ['NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M'];
+
+var OPS = {
+  NOP: ['none', 0x00], HLT: ['none', 0x76], XCHG: ['none', 0xEB], XTHL: ['none', 0xE3],
+  SPHL: ['none', 0xF9], PCHL: ['none', 0xE9], DAA: ['none', 0x27], CMA: ['none', 0x2F],
+  STC: ['none', 0x37], CMC: ['none', 0x3F], RLC: ['none', 0x07], RRC: ['none', 0x0F],
+  RAL: ['none', 0x17], RAR: ['none', 0x1F], DI: ['none', 0xF3], EI: ['none', 0xFB],
+  RIM: ['none', 0x20], SIM: ['none', 0x30], RET: ['none', 0xC9],
+  MOV: ['mov', 0x40], MVI: ['mvi', 0x06], LXI: ['lxi', 0x01],
+  INR: ['r3', 0x04], DCR: ['r3', 0x05],
+  ADD: ['r0', 0x80], ADC: ['r0', 0x88], SUB: ['r0', 0x90], SBB: ['r0', 0x98],
+  ANA: ['r0', 0xA0], XRA: ['r0', 0xA8], ORA: ['r0', 0xB0], CMP: ['r0', 0xB8],
+  ADI: ['d8', 0xC6], ACI: ['d8', 0xCE], SUI: ['d8', 0xD6], SBI: ['d8', 0xDE],
+  ANI: ['d8', 0xE6], XRI: ['d8', 0xEE], ORI: ['d8', 0xF6], CPI: ['d8', 0xFE],
+  IN: ['d8', 0xDB], OUT: ['d8', 0xD3],
+  INX: ['rp', 0x03], DCX: ['rp', 0x0B], DAD: ['rp', 0x09], PUSH: ['rpp', 0xC5], POP: ['rpp', 0xC1],
+  STAX: ['stax', 0x02], LDAX: ['stax', 0x0A], RST: ['rst', 0xC7],
+  LDA: ['a16', 0x3A], STA: ['a16', 0x32], LHLD: ['a16', 0x2A], SHLD: ['a16', 0x22],
+  JMP: ['a16', 0xC3], CALL: ['a16', 0xCD]
+};
+CCN.forEach(function (c, i) {
+  OPS['J' + c] = ['a16', 0xC2 | (i << 3)];
+  OPS['C' + c] = ['a16', 0xC4 | (i << 3)];
+  OPS['R' + c] = ['none', 0xC0 | (i << 3)];
+});
+var KSIZE = { none: 1, mov: 1, mvi: 2, lxi: 3, r3: 1, r0: 1, d8: 2, rp: 1, rpp: 1, stax: 1, a16: 3, rst: 1 };
+var KARGS = { none: 0, mov: 2, mvi: 2, lxi: 2, r3: 1, r0: 1, d8: 1, rp: 1, rpp: 1, stax: 1, a16: 1, rst: 1 };
+var ALUK = { ADD: 0, ADI: 0, ADC: 1, ACI: 1, SUB: 2, SUI: 2, SBB: 3, SBI: 3, ANA: 4, ANI: 4, XRA: 5, XRI: 5, ORA: 6, ORI: 6, CMP: 7, CPI: 7 };
+
+var DEC = [];
+(function () {
+  for (var i = 0; i < 256; i++) DEC[i] = null;
+  function def(op, mn, kind, a, b) { DEC[op] = { mn: mn, kind: kind, a: a, b: b }; }
+  Object.keys(OPS).forEach(function (mn) {
+    var kind = OPS[mn][0], base = OPS[mn][1], i, j;
+    if (kind === 'none' || kind === 'd8' || kind === 'a16') def(base, mn, kind);
+    else if (kind === 'mov') { for (i = 0; i < 8; i++) for (j = 0; j < 8; j++) { if (i === 6 && j === 6) continue; def(0x40 | (i << 3) | j, mn, kind, i, j); } }
+    else if (kind === 'mvi' || kind === 'r3') { for (i = 0; i < 8; i++) def(base | (i << 3), mn, kind, i); }
+    else if (kind === 'r0') { for (i = 0; i < 8; i++) def(base | i, mn, kind, i); }
+    else if (kind === 'lxi' || kind === 'rp' || kind === 'rpp') { for (i = 0; i < 4; i++) def(base | (i << 4), mn, kind, i); }
+    else if (kind === 'stax') { for (i = 0; i < 2; i++) def(base | (i << 4), mn, kind, i); }
+    else if (kind === 'rst') { for (i = 0; i < 8; i++) def(base | (i << 3), mn, kind, i); }
+  });
+})();
+
+function hex2(v) { return (v & 255).toString(16).toUpperCase().padStart(2, '0') + 'H'; }
+function hex4(v) { return (v & 65535).toString(16).toUpperCase().padStart(4, '0') + 'H'; }
+function h2(v) { return (v & 255).toString(16).toUpperCase().padStart(2, '0'); }
+
+/* ---------- assembler ---------- */
+function evalExpr(s, labels, here) {
+  s = (s || '').trim();
+  if (!s) throw new Error('missing operand');
+  var terms = s.match(/[+-]?\s*[^+-]+/g) || [];
+  var total = 0;
+  terms.forEach(function (t) {
+    var sign = 1; t = t.trim();
+    if (t[0] === '+') t = t.slice(1).trim();
+    else if (t[0] === '-') { sign = -1; t = t.slice(1).trim(); }
+    total += sign * atom(t);
+  });
+  return total;
+  function atom(t) {
+    var u = t.toUpperCase();
+    if (u === '$') return here;
+    if (Object.prototype.hasOwnProperty.call(labels, u)) return labels[u];
+    if (/^'.'$/.test(t)) return t.charCodeAt(1);
+    if (/^[0-9A-F]+H$/.test(u)) return parseInt(u.slice(0, -1), 16);
+    if (/^0X[0-9A-F]+$/.test(u)) return parseInt(u.slice(2), 16);
+    if (/^[01]+B$/.test(u)) return parseInt(u.slice(0, -1), 2);
+    if (/^[0-9]+D?$/.test(u)) return parseInt(u, 10);
+    throw new Error('unknown symbol or number "' + t + '"');
+  }
+}
+
+function splitArgs(s) {
+  var out = [], cur = '', q = false;
+  for (var i = 0; i < s.length; i++) {
+    var ch = s[i];
+    if (ch === '"') { q = !q; cur += ch; }
+    else if (ch === ',' && !q) { out.push(cur.trim()); cur = ''; }
+    else cur += ch;
+  }
+  if (cur.trim() !== '' || out.length) out.push(cur.trim());
+  return out;
+}
+
+function parseLine(raw) {
+  var line = raw.replace(/;.*$/, '').trim();
+  if (!line) return null;
+  var label = null;
+  var m = line.match(/^([A-Za-z_@?.][\w@?.]*):\s*(.*)$/);
+  if (m) { label = m[1].toUpperCase(); line = m[2]; }
+  var e = line.match(/^([A-Za-z_][\w]*)\s+EQU\s+(.+)$/i);
+  if (e) return { label: label, equ: [e[1].toUpperCase(), e[2]] };
+  if (!line) return { label: label };
+  var sp = line.match(/^(\S+)\s*(.*)$/);
+  return { label: label, mn: sp[1].toUpperCase(), args: sp[2] };
+}
+
+function assemble(src) {
+  var lines = src.split(/\r?\n/);
+  var labels = {}, items = [], errors = [];
+  var addr = 0, start = null;
+
+  lines.forEach(function (raw, i) {
+    try {
+      var p = parseLine(raw);
+      if (!p) return;
+      if (p.label) {
+        if (Object.prototype.hasOwnProperty.call(labels, p.label)) throw new Error('label ' + p.label + ' is defined twice');
+        labels[p.label] = addr;
+      }
+      if (p.equ) { labels[p.equ[0]] = evalExpr(p.equ[1], labels, addr); return; }
+      if (!p.mn) return;
+      if (p.mn === 'END') return;
+      if (p.mn === 'ORG') { addr = evalExpr(p.args, labels, addr) & 0xFFFF; return; }
+      if (p.mn === 'DB' || p.mn === 'DW') {
+        var parts = splitArgs(p.args), size = 0;
+        parts.forEach(function (x) {
+          if (/^".*"$/.test(x)) size += (p.mn === 'DB' ? x.length - 2 : (x.length - 2) * 2);
+          else size += (p.mn === 'DB' ? 1 : 2);
+        });
+        items.push({ ln: i + 1, raw: raw, addr: addr, mn: p.mn, args: parts, size: size, data: true });
+        addr = (addr + size) & 0xFFFF;
+        return;
+      }
+      if (!Object.prototype.hasOwnProperty.call(OPS, p.mn)) throw new Error('unknown mnemonic "' + p.mn + '" (labels need a colon, like LOOP:)');
+      var kind = OPS[p.mn][0];
+      var args = p.args.trim() === '' ? [] : p.args.split(',').map(function (x) { return x.trim(); });
+      if (args.length !== KARGS[kind]) throw new Error(p.mn + ' needs ' + KARGS[kind] + ' operand' + (KARGS[kind] === 1 ? '' : 's'));
+      if (start === null) start = addr;
+      items.push({ ln: i + 1, raw: raw, addr: addr, mn: p.mn, args: args, kind: kind, size: KSIZE[kind] });
+      addr = (addr + KSIZE[kind]) & 0xFFFF;
+    } catch (err) { errors.push({ ln: i + 1, msg: err.message }); }
+  });
+
+  var mem = new Uint8Array(65536), listing = [], codeBytes = 0;
+  function reg(t) { var u = t.toUpperCase(); if (!Object.prototype.hasOwnProperty.call(REG, u)) throw new Error('bad register "' + t + '"'); return REG[u]; }
+  function rpn(t, psw) {
+    var u = t.toUpperCase(), tab = psw ? RPP : RPS, k = tab.indexOf(u);
+    if (k < 0) throw new Error('bad register pair "' + t + '" (use ' + tab.join(', ') + ')');
+    return k;
+  }
+  function d8(t, a) { var v = evalExpr(t, labels, a); if (v < -128 || v > 255) throw new Error('value ' + v + ' does not fit in 8 bits'); return v & 255; }
+  function a16(t, a) { var v = evalExpr(t, labels, a); if (v < 0 || v > 65535) throw new Error('address out of range'); return v; }
+
+  items.forEach(function (it) {
+    try {
+      var bytes = [];
+      if (it.data) {
+        it.args.forEach(function (x) {
+          if (/^".*"$/.test(x)) { for (var k = 1; k < x.length - 1; k++) { bytes.push(x.charCodeAt(k) & 255); if (it.mn === 'DW') bytes.push(0); } }
+          else if (it.mn === 'DB') bytes.push(d8(x, it.addr));
+          else { var w = a16(x, it.addr); bytes.push(w & 255, w >> 8); }
+        });
+      } else {
+        var base = OPS[it.mn][1], a = it.args;
+        switch (it.kind) {
+          case 'none': bytes = [base]; break;
+          case 'mov': bytes = [0x40 | (reg(a[0]) << 3) | reg(a[1])]; if (bytes[0] === 0x76) throw new Error('MOV M, M is not valid (use HLT)'); break;
+          case 'mvi': bytes = [base | (reg(a[0]) << 3), d8(a[1], it.addr)]; break;
+          case 'lxi': { var w = a16(a[1], it.addr); bytes = [base | (rpn(a[0], false) << 4), w & 255, w >> 8]; break; }
+          case 'r3': bytes = [base | (reg(a[0]) << 3)]; break;
+          case 'r0': bytes = [base | reg(a[0])]; break;
+          case 'd8': bytes = [base, d8(a[0], it.addr)]; break;
+          case 'rp': bytes = [base | (rpn(a[0], false) << 4)]; break;
+          case 'rpp': bytes = [base | (rpn(a[0], true) << 4)]; break;
+          case 'stax': { var u = a[0].toUpperCase(); if (u !== 'B' && u !== 'D') throw new Error(it.mn + ' takes B or D'); bytes = [base | ((u === 'D' ? 1 : 0) << 4)]; break; }
+          case 'rst': { var rn = evalExpr(a[0], labels, it.addr); if (rn < 0 || rn > 7) throw new Error('RST takes 0 to 7'); bytes = [base | (rn << 3)]; break; }
+          case 'a16': { var ad = a16(a[0], it.addr); bytes = [base, ad & 255, ad >> 8]; break; }
+        }
+        codeBytes += bytes.length;
+      }
+      bytes.forEach(function (b, k) { mem[(it.addr + k) & 0xFFFF] = b; });
+      listing.push({ ln: it.ln, addr: it.addr, bytes: bytes, data: !!it.data });
+    } catch (err) { errors.push({ ln: it.ln, msg: err.message }); }
+  });
+
+  errors.sort(function (x, y) { return x.ln - y.ln; });
+  return { mem: mem, listing: listing, errors: errors, start: start === null ? 0 : start, codeBytes: codeBytes, labels: labels, hasCode: start !== null };
+}
+
+/* ---------- CPU ---------- */
+function makeCPU(image, start, inVal) {
+  return { mem: new Uint8Array(image), r: [0, 0, 0, 0, 0, 0, 0, 0], SP: 0xFFFF, PC: start,
+    S: 0, Z: 0, AC: 0, P: 0, CY: 0, halted: false, inVal: inVal & 255, out: [] };
+}
+function HL(c) { return (c.r[4] << 8) | c.r[5]; }
+function getRP(c, p) { return p === 3 ? c.SP : (c.r[p * 2] << 8) | c.r[p * 2 + 1]; }
+function setRP(c, p, v) { v &= 0xFFFF; if (p === 3) c.SP = v; else { c.r[p * 2] = v >> 8; c.r[p * 2 + 1] = v & 255; } }
+function setSZP(c, v) {
+  v &= 255; c.S = v >> 7; c.Z = v === 0 ? 1 : 0;
+  var x = v ^ (v >> 4); x ^= x >> 2; x ^= x >> 1; c.P = (x & 1) ? 0 : 1;
+}
+function flagByte(c) { return (c.S << 7) | (c.Z << 6) | (c.AC << 4) | (c.P << 2) | 2 | c.CY; }
+function setFlagByte(c, b) { c.S = (b >> 7) & 1; c.Z = (b >> 6) & 1; c.AC = (b >> 4) & 1; c.P = (b >> 2) & 1; c.CY = b & 1; }
+function cond(c, i) {
+  switch (i) {
+    case 0: return !c.Z; case 1: return !!c.Z; case 2: return !c.CY; case 3: return !!c.CY;
+    case 4: return !c.P; case 5: return !!c.P; case 6: return !c.S; default: return !!c.S;
+  }
+}
+function alu(c, k, v) {
+  var a = c.r[7], res = 0, s;
+  if (k === 0 || k === 1) { var cy = k === 1 ? c.CY : 0; s = a + v + cy; c.AC = ((a & 15) + (v & 15) + cy) > 15 ? 1 : 0; c.CY = s > 255 ? 1 : 0; res = s & 255; }
+  else if (k === 2 || k === 3 || k === 7) { var bw = k === 3 ? c.CY : 0; s = a - v - bw; c.AC = ((a & 15) + ((~v) & 15) + (1 - bw)) > 15 ? 1 : 0; c.CY = s < 0 ? 1 : 0; res = s & 255; }
+  else if (k === 4) { res = a & v; c.AC = 1; c.CY = 0; }
+  else if (k === 5) { res = a ^ v; c.AC = 0; c.CY = 0; }
+  else { res = a | v; c.AC = 0; c.CY = 0; }
+  setSZP(c, res);
+  if (k !== 7) c.r[7] = res;
+}
+
+function fmtInstr(d, b) {
+  var mn = d.mn;
+  switch (d.kind) {
+    case 'none': return mn;
+    case 'mov': return 'MOV ' + RN[d.a] + ', ' + RN[d.b];
+    case 'mvi': return 'MVI ' + RN[d.a] + ', ' + hex2(b[1]);
+    case 'lxi': return 'LXI ' + RPS[d.a] + ', ' + hex4((b[2] << 8) | b[1]);
+    case 'r3': case 'r0': return mn + ' ' + RN[d.a];
+    case 'd8': return mn + ' ' + hex2(b[1]);
+    case 'rp': return mn + ' ' + RPS[d.a];
+    case 'rpp': return mn + ' ' + RPP[d.a];
+    case 'stax': return mn + ' ' + (d.a ? 'D' : 'B');
+    case 'rst': return 'RST ' + d.a;
+    case 'a16': return mn + ' ' + hex4((b[2] << 8) | b[1]);
+  }
+  return mn;
+}
+
+function stepCPU(c) {
+  var mem = c.mem, cyc = [], pc0 = c.PC, f = c.fault;
+  var fv = function (v) { if (!f) return v; v = ((v & f.and) | f.or) & 255; if (f.br && (v & f.br) !== f.br) v &= ~f.br & 255; return v; };
+  var opG = mem[c.PC], op = fv(opG), d = DEC[op];
+  if (!d) return { error: 'Undefined opcode ' + hex2(op) + ' at ' + hex4(c.PC) + '.' + (f ? ' The faulty data bus delivered a byte the 8085 does not define.' : ' The program ran past its end; add HLT.') };
+  var bytes = [op];
+  c.PC = (c.PC + 1) & 0xFFFF;
+  var cy = function (o, g) { if (g !== undefined && g !== o.data) { o.fault = true; o.good = g; } cyc.push(o); };
+  var rd = function (a) { return mem[a & 0xFFFF]; };
+  var OF = function (n) { cy({ type: 'OF', n: n || 4, addr: pc0, data: op, src: 'PC', what: 'Opcode fetch' }, opG); };
+  var fetch = function (what) { var a = c.PC, g = rd(a), v = fv(g); c.PC = (a + 1) & 0xFFFF; bytes.push(v); cy({ type: 'MR', n: 3, addr: a, data: v, src: 'PC', what: what }, g); return v; };
+  var skip = function () { bytes.push(fv(rd(c.PC))); c.PC = (c.PC + 1) & 0xFFFF; };
+  var rmem = function (a, src, what) { a &= 0xFFFF; var g = mem[a], v = fv(g); cy({ type: 'MR', n: 3, addr: a, data: v, src: src, what: what }, g); return v; };
+  var wmem = function (a, v, src, what) { a &= 0xFFFF; v &= 255; mem[a] = v; cyc.push({ type: 'MW', n: 3, addr: a, data: v, src: src, what: what }); };
+  var bi = function () { cyc.push({ type: 'BI', n: 3, addr: 0, data: null, src: '', what: 'Internal 16-bit add' }); };
+  var push16 = function (hi, lo) { wmem(c.SP - 1, hi, 'SP', 'Push high byte'); wmem(c.SP - 2, lo, 'SP', 'Push low byte'); c.SP = (c.SP - 2) & 0xFFFF; };
+  var pop16 = function () { var lo = rmem(c.SP, 'SP', 'Pop low byte'); var hi = rmem(c.SP + 1, 'SP', 'Pop high byte'); c.SP = (c.SP + 2) & 0xFFFF; return (hi << 8) | lo; };
+  var r = c.r, mn = d.mn, lo, hi, a, v, t;
+
+  switch (mn) {
+    case 'NOP': case 'DI': case 'EI': case 'SIM': case 'STC': case 'CMC': case 'CMA': case 'DAA':
+    case 'RLC': case 'RRC': case 'RAL': case 'RAR': case 'RIM':
+      OF();
+      if (mn === 'STC') c.CY = 1;
+      else if (mn === 'CMC') c.CY ^= 1;
+      else if (mn === 'CMA') r[7] = (~r[7]) & 255;
+      else if (mn === 'RIM') r[7] = 0;
+      else if (mn === 'RLC') { c.CY = r[7] >> 7; r[7] = ((r[7] << 1) | c.CY) & 255; }
+      else if (mn === 'RRC') { c.CY = r[7] & 1; r[7] = (r[7] >> 1) | (c.CY << 7); }
+      else if (mn === 'RAL') { t = r[7] >> 7; r[7] = ((r[7] << 1) | c.CY) & 255; c.CY = t; }
+      else if (mn === 'RAR') { t = r[7] & 1; r[7] = (r[7] >> 1) | (c.CY << 7); c.CY = t; }
+      else if (mn === 'DAA') {
+        var add = 0, cy2 = c.CY, A = r[7];
+        if ((A & 15) > 9 || c.AC) add = 6;
+        if (A > 0x99 || c.CY) { add |= 0x60; cy2 = 1; }
+        c.AC = ((A & 15) + (add & 15)) > 15 ? 1 : 0; r[7] = (A + add) & 255; c.CY = cy2; setSZP(c, r[7]);
+      }
+      break;
+    case 'HLT': OF(5); c.halted = true; break;
+    case 'RST': OF(6); push16(c.PC >> 8, c.PC & 255); c.PC = d.a * 8; break;
+    case 'MOV':
+      OF();
+      if (d.a === 6) wmem(HL(c), r[d.b], 'HL', 'Write memory (M)');
+      else if (d.b === 6) r[d.a] = rmem(HL(c), 'HL', 'Read memory (M)');
+      else r[d.a] = r[d.b];
+      break;
+    case 'MVI':
+      OF(); v = fetch('Read immediate byte');
+      if (d.a === 6) wmem(HL(c), v, 'HL', 'Write memory (M)'); else r[d.a] = v;
+      break;
+    case 'LXI': OF(); lo = fetch('Read low-order data'); hi = fetch('Read high-order data'); setRP(c, d.a, (hi << 8) | lo); break;
+    case 'LDA': OF(); lo = fetch('Read low address byte'); hi = fetch('Read high address byte'); r[7] = rmem((hi << 8) | lo, 'direct address', 'Read memory'); break;
+    case 'STA': OF(); lo = fetch('Read low address byte'); hi = fetch('Read high address byte'); wmem((hi << 8) | lo, r[7], 'direct address', 'Write memory'); break;
+    case 'LHLD': OF(); lo = fetch('Read low address byte'); hi = fetch('Read high address byte'); a = (hi << 8) | lo;
+      r[5] = rmem(a, 'direct address', 'Read L'); r[4] = rmem(a + 1, 'direct address + 1', 'Read H'); break;
+    case 'SHLD': OF(); lo = fetch('Read low address byte'); hi = fetch('Read high address byte'); a = (hi << 8) | lo;
+      wmem(a, r[5], 'direct address', 'Write L'); wmem(a + 1, r[4], 'direct address + 1', 'Write H'); break;
+    case 'LDAX': OF(); r[7] = rmem(getRP(c, d.a), d.a ? 'DE' : 'BC', 'Read memory'); break;
+    case 'STAX': OF(); wmem(getRP(c, d.a), r[7], d.a ? 'DE' : 'BC', 'Write memory'); break;
+    case 'XCHG': OF(); t = r[2]; r[2] = r[4]; r[4] = t; t = r[3]; r[3] = r[5]; r[5] = t; break;
+    case 'INR': case 'DCR':
+      OF();
+      if (d.a === 6) { v = rmem(HL(c), 'HL', 'Read memory (M)'); } else v = r[d.a];
+      var res = (mn === 'INR' ? v + 1 : v - 1) & 255;
+      c.AC = mn === 'INR' ? (((v & 15) + 1) > 15 ? 1 : 0) : ((v & 15) !== 0 ? 1 : 0);
+      setSZP(c, res);
+      if (d.a === 6) wmem(HL(c), res, 'HL', 'Write memory (M)'); else r[d.a] = res;
+      break;
+    case 'INX': OF(6); setRP(c, d.a, getRP(c, d.a) + 1); break;
+    case 'DCX': OF(6); setRP(c, d.a, getRP(c, d.a) - 1); break;
+    case 'DAD': OF(); bi(); bi(); t = HL(c) + getRP(c, d.a); c.CY = t > 0xFFFF ? 1 : 0; setRP(c, 2, t); break;
+    case 'JMP': OF(); lo = fetch('Read low address byte'); hi = fetch('Read high address byte'); c.PC = (hi << 8) | lo; break;
+    case 'CALL': OF(6); lo = fetch('Read low address byte'); hi = fetch('Read high address byte');
+      push16(c.PC >> 8, c.PC & 255); c.PC = (hi << 8) | lo; break;
+    case 'RET': OF(); c.PC = pop16(); break;
+    case 'PCHL': OF(6); c.PC = HL(c); break;
+    case 'SPHL': OF(6); c.SP = HL(c); break;
+    case 'XTHL': OF(); lo = rmem(c.SP, 'SP', 'Pop low byte'); hi = rmem(c.SP + 1, 'SP', 'Pop high byte');
+      wmem(c.SP, r[5], 'SP', 'Push L'); wmem(c.SP + 1, r[4], 'SP + 1', 'Push H'); r[5] = lo; r[4] = hi; break;
+    case 'PUSH': OF(6);
+      if (d.a === 3) push16(r[7], flagByte(c)); else push16(r[d.a * 2], r[d.a * 2 + 1]);
+      break;
+    case 'POP': OF(); t = pop16();
+      if (d.a === 3) { r[7] = t >> 8; setFlagByte(c, t & 255); } else setRP(c, d.a, t);
+      break;
+    case 'IN': { OF(); v = fetch('Read port address');
+      var ig = c.inVal, iv = fv(ig);
+      cy({ type: 'IOR', n: 3, addr: (v << 8) | v, data: iv, src: 'port', what: 'Read input port' }, ig); r[7] = iv; break; }
+    case 'OUT': OF(); v = fetch('Read port address');
+      cyc.push({ type: 'IOW', n: 3, addr: (v << 8) | v, data: r[7], src: 'port', what: 'Write output port' }); c.out.push({ port: v, val: r[7] }); break;
+    default:
+      if (d.kind === 'r0') { OF(); v = d.a === 6 ? rmem(HL(c), 'HL', 'Read memory (M)') : r[d.a]; alu(c, ALUK[mn], v); }
+      else if (d.kind === 'd8' && ALUK[mn] !== undefined) { OF(); v = fetch('Read immediate byte'); alu(c, ALUK[mn], v); }
+      else if (mn[0] === 'J') { OF(); lo = fetch('Read low address byte');
+        if (cond(c, CCN.indexOf(mn.slice(1)))) { hi = fetch('Read high address byte'); c.PC = (hi << 8) | lo; } else skip(); }
+      else if (mn[0] === 'C') { OF(6); lo = fetch('Read low address byte');
+        if (cond(c, CCN.indexOf(mn.slice(1)))) { hi = fetch('Read high address byte'); push16(c.PC >> 8, c.PC & 255); c.PC = (hi << 8) | lo; } else skip(); }
+      else if (mn[0] === 'R') { OF(6); if (cond(c, CCN.indexOf(mn.slice(1)))) c.PC = pop16(); }
+      else return { error: 'Instruction ' + mn + ' is not supported' };
+  }
+  var total = 0, faulted = false;
+  cyc.forEach(function (y) {
+    if (c.waits && y.type !== 'BI') { y.w = c.waits; y.n += c.waits; }
+    total += y.n; if (y.fault) faulted = true;
+  });
+  return { pc: pc0, op: op, mn: mn, bytes: bytes, text: fmtInstr(d, bytes), cycles: cyc, t: total, faulted: faulted };
+}
+
+function snap(c) { return { A: c.r[7], B: c.r[0], C: c.r[1], D: c.r[2], E: c.r[3], H: c.r[4], L: c.r[5], SP: c.SP, PC: c.PC, S: c.S, Z: c.Z, AC: c.AC, P: c.P, CY: c.CY }; }
+
+function runProgram(src, inVal, opts) {
+  var asm = assemble(src);
+  var res = { asm: asm, error: null, trace: [], total: null };
+  if (asm.errors.length) return res;
+  if (!asm.hasCode) { res.error = 'No instructions found. Write a program such as MVI A, 05H then HLT.'; return res; }
+  var cpu = makeCPU(asm.mem, asm.start, inVal === undefined ? 0x5A : inVal);
+  if (opts) { cpu.fault = opts.fault || null; cpu.waits = opts.waits || 0; }
+  var KEEP = 3000, LIMIT = 200000;
+  var tot = { n: 0, t: 0, faults: 0, types: { OF: { c: 0, t: 0 }, MR: { c: 0, t: 0 }, MW: { c: 0, t: 0 }, IOR: { c: 0, t: 0 }, IOW: { c: 0, t: 0 }, BI: { c: 0, t: 0 } }, byMn: {}, halted: false, capped: false };
+  res.snap0 = snap(cpu);
+  for (var i = 0; i < LIMIT; i++) {
+    var s = stepCPU(cpu);
+    if (s.error) { res.error = s.error; break; }
+    tot.n++; tot.t += s.t; if (s.faulted) tot.faults++;
+    s.cycles.forEach(function (y) { tot.types[y.type].c++; tot.types[y.type].t += y.n; });
+    var m = tot.byMn[s.mn] || (tot.byMn[s.mn] = { c: 0, t: 0 }); m.c++; m.t += s.t;
+    if (res.trace.length < KEEP) { s.snap = snap(cpu); s.outN = cpu.out.length; res.trace.push(s); }
+    if (cpu.halted) { tot.halted = true; break; }
+    if (i === LIMIT - 1) tot.capped = true;
+  }
+  tot.kept = res.trace.length;
+  res.total = tot; res.cpu = cpu; res.out = cpu.out;
+  return res;
+}
+/* ---------- examples ---------- */
+var EXAMPLES = [
+  { name: 'Add two numbers (LDA, ADD, STA)', src:
+'; Add the bytes at 2000H and 2001H, store the sum at 2002H\n' +
+'        ORG 0000H\n' +
+'        LDA 2000H\n' +
+'        MOV B, A\n' +
+'        LDA 2001H\n' +
+'        ADD B\n' +
+'        STA 2002H\n' +
+'        HLT\n' +
+'        ORG 2000H\n' +
+'        DB 25H, 17H\n' },
+  { name: 'Copy 10 bytes (loop)', src:
+'; Copy 10 bytes from 2000H to 2100H\n' +
+'        ORG 0000H\n' +
+'        LXI H, 2000H     ; source\n' +
+'        LXI D, 2100H     ; destination\n' +
+'        MVI C, 0AH       ; count\n' +
+'LOOP:   MOV A, M\n' +
+'        STAX D\n' +
+'        INX H\n' +
+'        INX D\n' +
+'        DCR C\n' +
+'        JNZ LOOP\n' +
+'        HLT\n' +
+'        ORG 2000H\n' +
+'        DB 01H, 02H, 03H, 04H, 05H, 06H, 07H, 08H, 09H, 0AH\n' },
+  { name: 'CALL and RET (stack cycles)', src:
+'; Double a number in a subroutine\n' +
+'        ORG 0000H\n' +
+'        LXI SP, 3000H\n' +
+'        MVI A, 05H\n' +
+'        CALL DOUBLE\n' +
+'        STA 2000H\n' +
+'        HLT\n' +
+'DOUBLE: ADD A\n' +
+'        RET\n' },
+  { name: '16-bit add (DAD, bus idle cycles)', src:
+'; HL = 1234H + 0F0FH\n' +
+'        ORG 0000H\n' +
+'        LXI H, 1234H\n' +
+'        LXI B, 0F0FH\n' +
+'        DAD B\n' +
+'        SHLD 2000H\n' +
+'        HLT\n' },
+  { name: 'Port I/O (IN and OUT)', src:
+'; Read a port, add 1, write it to another port\n' +
+'        ORG 0000H\n' +
+'        IN 00H\n' +
+'        ADI 01H\n' +
+'        OUT 01H\n' +
+'        HLT\n' },
+  { name: 'BCD addition (DAA)', src:
+'; 29 + 18 in BCD = 47\n' +
+'        ORG 0000H\n' +
+'        MVI A, 29H\n' +
+'        ADI 18H\n' +
+'        DAA\n' +
+'        STA 2000H\n' +
+'        HLT\n' },
+  { name: 'RST (restart vector)', src:
+'; RST 2 pushes PC and jumps to 0010H (2 x 8), 12 T-states\n' +
+'        ORG 0000H\n' +
+'        LXI SP, 3000H\n' +
+'        MVI A, 05H\n' +
+'        RST 2\n' +
+'        STA 2000H\n' +
+'        HLT\n' +
+'        ORG 0010H\n' +
+'        ADD A\n' +
+'        RET\n' },
+  { name: 'Software delay loop', src:
+'; Delay: loop count 64H (100 decimal)\n' +
+'        ORG 0000H\n' +
+'        MVI B, 64H\n' +
+'LOOP:   DCR B\n' +
+'        JNZ LOOP\n' +
+'        HLT\n' }
+];
+
+var SUM_HEAD = '        ORG 0000H\n        LXI H, 2000H\n';
+var SUM_DATA = '        ORG 2000H\n        DB 01H, 02H, 03H, 04H, 05H, 06H, 07H, 08H\n';
+var UNROLLED = (function () {
+  var s = SUM_HEAD + '        XRA A\n';
+  for (var i = 0; i < 8; i++) { s += '        ADD M\n'; if (i < 7) s += '        INX H\n'; }
+  return s + '        STA 2010H\n        HLT\n' + SUM_DATA;
+})();
+
+var PAIRS = [
+  { name: 'Sum 8 bytes: loop vs unrolled',
+    a: '; A: loop\n' + SUM_HEAD + '        MVI C, 08H\n        XRA A\nLOOP:   ADD M\n        INX H\n        DCR C\n        JNZ LOOP\n        STA 2010H\n        HLT\n' + SUM_DATA,
+    b: '; B: unrolled (no loop overhead)\n' + UNROLLED },
+  { name: 'Delay loop: register counter vs memory counter',
+    a: '; A: counter in register B\n        ORG 0000H\n        MVI B, 64H\nLOOP:   DCR B\n        JNZ LOOP\n        HLT\n',
+    b: '; B: counter in memory (DCR M)\n        ORG 0000H\n        MVI A, 64H\n        STA 2100H\n        LXI H, 2100H\nLOOP:   DCR M\n        JNZ LOOP\n        HLT\n' }
+];
+
+/* ---------- timing diagram ---------- */
+var TW = 52, LBL = 96, ROW = 34, HDR = 46;
+var TYPE_NAME = { OF: 'Opcode fetch', MR: 'Memory read', MW: 'Memory write', IOR: 'I/O read', IOW: 'I/O write', BI: 'Bus idle' };
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+/* label of the k-th T-state (0-based) of a cycle with w wait states: T1, T2, TW..., T3, T4... */
+function tl(k, w) { return k < 2 ? 'T' + (k + 1) : (k < 2 + w ? 'TW' : 'T' + (k + 1 - w)); }
+
+function buildSignals(step) {
+  var sig = { CLK: [], A: [], AD: [], ALE: [], RD: [], WR: [], IOM: [], S1: [], S0: [] };
+  function seg(list, t0, t1, v, label, merge, bad) {
+    var last = list[list.length - 1];
+    if (merge && last && last.v === v && Math.abs(last.t1 - t0) < 1e-9) { last.t1 = t1; return; }
+    list.push({ t0: t0, t1: t1, v: v, label: label || '', bad: !!bad });
+  }
+  var s = 0, total = 0;
+  step.cycles.forEach(function (cy) { total += cy.n; });
+  for (var i = 0; i < total; i++) { seg(sig.CLK, i, i + 0.5, 1, '', false); seg(sig.CLK, i + 0.5, i + 1, 0, '', false); }
+  step.cycles.forEach(function (cy) {
+    var n = cy.n, e = s + n, w = cy.w || 0, q = s + 3 + w;
+    var isRd = cy.type === 'OF' || cy.type === 'MR' || cy.type === 'IOR';
+    var isWr = cy.type === 'MW' || cy.type === 'IOW';
+    var io = cy.type === 'IOR' || cy.type === 'IOW';
+    if (cy.type === 'BI') {
+      seg(sig.A, s, e, 'z', 'idle'); seg(sig.AD, s, e, 'z', 'idle');
+      seg(sig.ALE, s, e, 0, '', true); seg(sig.RD, s, e, 1, '', true); seg(sig.WR, s, e, 1, '', true);
+      seg(sig.IOM, s, e, 'x'); seg(sig.S1, s, e, 'x'); seg(sig.S0, s, e, 'x');
+    } else {
+      var hi = (cy.addr >> 8) & 255, lo = cy.addr & 255, dl = h2(cy.data) + 'H';
+      seg(sig.A, s, e, 'v', h2(hi) + 'H');
+      seg(sig.AD, s, s + 1, 'v', h2(lo) + 'H');
+      if (isRd) { seg(sig.AD, s + 1, s + 1.5, 'z', ''); seg(sig.AD, s + 1.5, q, 'v', dl, false, cy.fault); }
+      else seg(sig.AD, s + 1, q, 'v', dl, false, cy.fault);
+      if (e > q) seg(sig.AD, q, e, 'z', 'Hi-Z');
+      seg(sig.ALE, s, s + 1, 1, '', true); seg(sig.ALE, s + 1, e, 0, '', true);
+      seg(sig.RD, s, s + 1, 1, '', true); seg(sig.RD, s + 1, q, isRd ? 0 : 1, '', true); seg(sig.RD, q, e, 1, '', true);
+      seg(sig.WR, s, s + 1, 1, '', true); seg(sig.WR, s + 1, q, isWr ? 0 : 1, '', true); seg(sig.WR, q, e, 1, '', true);
+      seg(sig.IOM, s, e, io ? 1 : 0, '', true);
+      var s1 = isWr ? 0 : 1, s0 = (isWr || cy.type === 'OF') ? 1 : 0;
+      if (step.mn === 'HLT' && cy.type === 'OF') {
+        seg(sig.S1, s, q, 1, '', true); seg(sig.S0, s, q, 1, '', true);
+        seg(sig.S1, q, e, 0, '', true); seg(sig.S0, q, e, 0, '', true);
+      } else { seg(sig.S1, s, e, s1, '', true); seg(sig.S0, s, e, s0, '', true); }
+    }
+    s = e;
+  });
+  return { sig: sig, total: total };
+}
+
+function buildDiagram(step, opts) {
+  opts = opts || {};
+  var b = buildSignals(step), sig = b.sig, total = b.total;
+  if (opts.quiz) { sig.S1 = [{ t0: 0, t1: total, v: 'x', label: '' }]; sig.S0 = [{ t0: 0, t1: total, v: 'x', label: '' }]; }
+  var W = LBL + total * TW + 14, H = HDR + 9 * ROW + 10;
+  var X = function (t) { return Math.round((LBL + t * TW) * 10) / 10; };
+  var o = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bus timing diagram' + (opts.quiz ? '' : ' for ' + esc(step.text)) + '">';
+
+  var mcEdges = {}, s = 0;
+  step.cycles.forEach(function (cy) { mcEdges[s] = 1; s += cy.n; }); mcEdges[total] = 1;
+  for (var t = 0; t <= total; t++) o += '<line class="gl' + (mcEdges[t] ? ' m' : '') + '" x1="' + X(t) + '" x2="' + X(t) + '" y1="' + (mcEdges[t] ? 4 : HDR - 6) + '" y2="' + (H - 6) + '"/>';
+
+  s = 0;
+  step.cycles.forEach(function (cy, ci) {
+    var w = cy.n * TW - 3, tp = opts.quiz ? 'BI' : cy.type;
+    o += '<rect class="t-' + tp + '" style="fill:var(--c)" x="' + (X(s) + 1.5) + '" y="4" width="' + w + '" height="20" rx="3"/>';
+    o += '<text class="sv-band" x="' + (X(s) + 8) + '" y="18">M' + (ci + 1) + (opts.quiz ? '  ?' : ' ' + TYPE_NAME[cy.type]) + '</text>';
+    for (var k = 0; k < cy.n; k++) o += '<text class="sv-t" text-anchor="middle" x="' + X(s + k + 0.5) + '" y="39">' + tl(k, cy.w || 0) + '</text>';
+    s += cy.n;
+  });
+
+  var names = ['CLK', 'A15–A8', 'AD7–AD0', 'ALE', '<tspan class="ov">RD</tspan>', '<tspan class="ov">WR</tspan>', 'IO/<tspan class="ov">M</tspan>', 'S1', 'S0'];
+  var keys = ['CLK', 'A', 'AD', 'ALE', 'RD', 'WR', 'IOM', 'S1', 'S0'];
+  keys.forEach(function (k, i) {
+    var y0 = HDR + i * ROW;
+    o += '<text class="sv-label" x="8" y="' + (y0 + ROW / 2 + 4) + '">' + names[i] + '</text>';
+    if (k === 'A' || k === 'AD') o += drawBus(sig[k], y0, X);
+    else o += drawDigital(sig[k], y0, X, k === 'RD' || k === 'WR');
+  });
+  return o + '</svg>';
+}
+
+function drawDigital(list, y0, X, activeLow) {
+  var hiY = y0 + 8, loY = y0 + ROW - 9, d = '', bg = '', act = '', open = false;
+  list.forEach(function (sg) {
+    var x0 = X(sg.t0), x1 = X(sg.t1);
+    if (sg.v === 'x') { bg += '<rect class="xbg" x="' + x0 + '" y="' + (y0 + 6) + '" width="' + (x1 - x0) + '" height="' + (ROW - 12) + '"/>'; open = false; return; }
+    var y = sg.v === 1 ? hiY : loY;
+    d += (open ? 'L' : 'M') + x0 + ',' + y + 'L' + x1 + ',' + y; open = true;
+    if (activeLow && sg.v === 0) {
+      bg += '<rect class="actbg" x="' + x0 + '" y="' + (y0 + 3) + '" width="' + (x1 - x0) + '" height="' + (ROW - 6) + '"/>';
+      act += '<path class="tr act" d="M' + x0 + ',' + y + 'L' + x1 + ',' + y + '"/>';
+    }
+  });
+  return bg + '<path class="tr" d="' + d + '"/>' + act;
+}
+
+function drawBus(list, y0, X) {
+  var top = y0 + 6, bot = y0 + ROW - 6, mid = y0 + ROW / 2, o = '';
+  list.forEach(function (sg) {
+    var x0 = X(sg.t0), x1 = X(sg.t1), w = x1 - x0;
+    if (sg.v === 'v') {
+      var sl = Math.min(5, w / 3);
+      o += '<polygon class="busp' + (sg.bad ? ' bad' : '') + '" points="' + [x0 + ',' + mid, (x0 + sl) + ',' + top, (x1 - sl) + ',' + top, x1 + ',' + mid, (x1 - sl) + ',' + bot, (x0 + sl) + ',' + bot].join(' ') + '"/>';
+      if (w >= 30 && sg.label) o += '<text class="sv-bus' + (sg.bad ? ' bad' : '') + '" text-anchor="middle" x="' + ((x0 + x1) / 2) + '" y="' + (mid + 4) + '">' + esc(sg.label) + '</text>';
+    } else {
+      o += '<line class="zline" x1="' + x0 + '" x2="' + x1 + '" y1="' + mid + '" y2="' + mid + '"/>';
+      if (w >= 40 && sg.label) o += '<text class="sv-z" text-anchor="middle" x="' + ((x0 + x1) / 2) + '" y="' + (mid - 5) + '">' + esc(sg.label) + '</text>';
+    }
+  });
+  return o;
+}
+
+/* ---------- per-T-state explanation ---------- */
+function cycleLines(step, cy) {
+  var L = [], w = cy.w || 0, hi = (cy.addr >> 8) & 255, lo = cy.addr & 255, io = cy.type === 'IOR' || cy.type === 'IOW';
+  var where = io ? 'port ' + hex2(lo) + ' (repeated on both halves of the bus)' : hex4(cy.addr) + (cy.src ? ' (' + cy.src + ')' : '');
+  var T1 = 'Address ' + where + ': ' + hex2(hi) + ' on A15–A8, ' + hex2(lo) + ' on AD7–AD0. ALE is high, so the external latch captures the low byte.' + (io ? ' IO/M̄ is high.' : '');
+  var ft = cy.fault ? ' <b class="badtxt">Fault: the device held ' + hex2(cy.good) + ' but the faulty bus line delivered ' + hex2(cy.data) + '.</b>' : '';
+  if (cy.type === 'OF') {
+    L.push(T1);
+    L.push('ALE has fallen. <span class="ov">RD</span> goes low and memory puts opcode ' + hex2(cy.good !== undefined ? cy.good : cy.data) + ' on AD7–AD0. PC is incremented.');
+    L.push('The opcode ' + hex2(cy.data) + ' is latched into the instruction register. <span class="ov">RD</span> returns high.' + ft);
+    if (step.mn === 'HLT') { L.push('Opcode decoded as HLT.'); L.push('CPU enters the halt state: S1 = S0 = 0 and the buses float.'); }
+    else if (cy.n - w === 4) L.push('Opcode decoded as ' + esc(step.mn) + '. Simple operations finish here; otherwise more machine cycles follow.');
+    else { L.push('Opcode decoded as ' + esc(step.mn) + '. This opcode needs extra internal time.'); L.push('Internal operation (such as a 16-bit increment or pointer update). The bus is not used.'); L.push('Internal operation continues, then the next machine cycle starts.'); }
+  } else if (cy.type === 'MR' || cy.type === 'IOR') {
+    L.push(T1);
+    L.push('<span class="ov">RD</span> goes low; ' + (io ? 'the input device' : 'memory') + ' drives the data onto AD7–AD0.');
+    L.push('The CPU latches ' + hex2(cy.data) + ' (' + esc(cy.what.toLowerCase()) + '). <span class="ov">RD</span> returns high.' + ft);
+  } else if (cy.type === 'MW' || cy.type === 'IOW') {
+    L.push(T1);
+    L.push('The CPU drives ' + hex2(cy.data) + ' onto AD7–AD0 and <span class="ov">WR</span> goes low.');
+    L.push((io ? 'The output device' : 'Memory') + ' stores ' + hex2(cy.data) + ' when <span class="ov">WR</span> returns high (' + esc(cy.what.toLowerCase()) + ').');
+  } else {
+    L.push('Internal 16-bit addition. The bus is idle and ALE stays low.');
+    L.push('The ALU adds the next byte of the register pair.');
+    L.push('The result is stored; the CPU moves on.');
+  }
+  if (w > 0 && cy.type !== 'BI') {
+    var wl = [];
+    for (var k = 0; k < w; k++) wl.push('Wait state: the memory or device is too slow, so it holds READY low. The CPU idles for one clock tick with <span class="ov">RD</span>/<span class="ov">WR</span> unchanged.');
+    L.splice.apply(L, [2, 0].concat(wl));
+  }
+  return L;
+}
+
+function explain(step) {
+  var out = '';
+  step.cycles.forEach(function (cy, ci) {
+    var w = cy.w || 0, lo = cy.addr & 255, io = cy.type === 'IOR' || cy.type === 'IOW';
+    var L = cycleLines(step, cy);
+    var title = 'M' + (ci + 1) + ' · ' + TYPE_NAME[cy.type] + (cy.type === 'BI' ? '' : ' · ' + (io ? 'port ' + hex2(lo) : hex4(cy.addr)));
+    out += '<div class="mc t-' + cy.type + '"><h3>' + title + ' <span class="note">' + cy.n + ' T' + (w ? ' incl. ' + w + ' wait' : '') + '</span></h3><ol>';
+    L.forEach(function (txt, k) { out += '<li><b>' + tl(k, w) + '</b><span>' + txt + '</span></li>'; });
+    out += '</ol></div>';
+  });
+  return out;
+}
+
+/* ---------- block diagram (space view) ---------- */
+function flatT(step) {
+  var list = [];
+  step.cycles.forEach(function (cy, ci) { for (var k = 0; k < cy.n; k++) list.push({ ci: ci, k: k }); });
+  return list;
+}
+
+function blockDiagram(step, ci, k) {
+  var cy = step.cycles[ci], w = cy.w || 0, lab = tl(k, w), bi = cy.type === 'BI';
+  var isRd = cy.type === 'OF' || cy.type === 'MR' || cy.type === 'IOR', isWr = cy.type === 'MW' || cy.type === 'IOW', io = cy.type === 'IOR' || cy.type === 'IOW';
+  var phase = bi ? 'idle' : (k === 0 ? 'T1' : (k < 2 + w ? 'T2' : (k === 2 + w ? 'T3' : 'post')));
+  var hi = (cy.addr >> 8) & 255, lo = cy.addr & 255, dv = cy.data === null ? 0 : cy.data;
+  var on = { hi: !bi, ad: phase === 'T1', ale: phase === 'T1', q: phase === 'T1' || phase === 'T2' || phase === 'T3' || phase === 'post' && !bi,
+    data: phase === 'T2' || phase === 'T3', rd: isRd && (phase === 'T2' || phase === 'T3'), wr: isWr && (phase === 'T2' || phase === 'T3') };
+  if (phase === 'post') on.q = false;
+  var devName = io ? 'I/O device' : 'Memory';
+  function wire(d, a, hot) { return '<path class="wire' + (a ? (hot ? ' hot' : ' on') : '') + '" d="' + d + '"/>'; }
+  function txt(x, y, s, cls, anc) { return '<text class="' + cls + '" x="' + x + '" y="' + y + '"' + (anc ? ' text-anchor="' + anc + '"' : '') + '>' + s + '</text>'; }
+  function arrow(x, y, dir, hot) { var p = dir > 0 ? [x + 6, y, x - 6, y - 6, x - 6, y + 6] : [x - 6, y, x + 6, y - 6, x + 6, y + 6]; return '<polygon class="arrow' + (hot ? ' hot' : '') + '" points="' + p[0] + ',' + p[1] + ' ' + p[2] + ',' + p[3] + ' ' + p[4] + ',' + p[5] + '"/>'; }
+  var o = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 290" width="100%" style="max-width:760px" role="img" aria-label="Block diagram of the 8085, address latch and memory at ' + lab + '">';
+  o += '<rect class="bk" x="20" y="30" width="150" height="240" rx="6"/><rect class="bk" x="290" y="92" width="110" height="58" rx="6"/><rect class="bk" x="540" y="30" width="160" height="240" rx="6"/>';
+  o += wire('M170,55H540', on.hi) + wire('M170,80H345V92', on.ale, true) + wire('M170,120H290', on.ad) + wire('M400,120H540', on.q) + wire(isRd ? 'M540,175H235V120' : 'M235,120V175H540', on.data) +
+    wire('M170,215H540', on.rd, true) + wire('M170,245H540', on.wr, true);
+  o += txt(95, 46, 'Intel 8085', 'bk-h', 'middle') + txt(345, 123, '74LS373', 'bk-h', 'middle') + txt(345, 140, 'address latch', 'bk-s', 'middle') + txt(620, 46, devName, 'bk-h', 'middle');
+  o += txt(164, 59, 'A15–A8', 'bk-p', 'end') + txt(164, 84, 'ALE', 'bk-p', 'end') + txt(164, 124, 'AD7–AD0', 'bk-p', 'end') + txt(164, 219, '<tspan class="ov">RD</tspan>', 'bk-p', 'end') + txt(164, 249, '<tspan class="ov">WR</tspan>', 'bk-p', 'end');
+  o += txt(546, 59, 'A15–A8', 'bk-p') + txt(546, 124, 'A7–A0', 'bk-p') + txt(546, 179, 'D7–D0', 'bk-p') + txt(546, 219, '<tspan class="ov">RD</tspan>', 'bk-p') + txt(546, 249, '<tspan class="ov">WR</tspan>', 'bk-p');
+  o += txt(296, 124, 'D', 'bk-p') + txt(394, 124, 'Q', 'bk-p', 'end') + txt(357, 107, 'G', 'bk-p');
+  if (on.hi) o += txt(355, 48, 'A15–A8 = ' + hex2(hi), 'bk-v hot', 'middle');
+  o += txt(355, 74, 'ALE = ' + (on.ale ? '1' : '0'), 'bk-v' + (on.ale ? ' hot' : ''), 'middle').replace('y="74"', 'y="76"');
+  if (on.ad) { o += txt(222, 113, hex2(lo), 'bk-v hot', 'middle') + arrow(262, 120, 1, false); }
+  if (on.q) o += txt(470, 113, 'A7–A0 = ' + hex2(lo), 'bk-v', 'middle');
+  if (on.data) {
+    var dir = isRd ? -1 : 1;
+    o += txt(390, 167, hex2(dv), 'bk-v' + (cy.fault ? ' badtxt' : ' hot'), 'middle') + arrow(dir > 0 ? 440 : 340, 175, dir, false);
+  }
+  o += txt(355, 209, '<tspan class="ov">RD</tspan> = ' + (on.rd ? '0 (active)' : '1'), 'bk-v' + (on.rd ? ' hot' : ''), 'middle');
+  o += txt(355, 239, '<tspan class="ov">WR</tspan> = ' + (on.wr ? '0 (active)' : '1'), 'bk-v' + (on.wr ? ' hot' : ''), 'middle');
+  var cpuSub = { T1: 'puts the address on the bus', T2: isRd ? 'waits for the data' : 'puts the data on the bus', T3: isRd ? 'latches ' + hex2(dv) : 'finishes the write', post: 'decodes / works internally', idle: 'works internally' }[phase];
+  if (lab === 'TW') cpuSub = 'idles: READY is low';
+  var memSub = { T1: 'sees address ' + hex4(io ? (lo << 8 | lo) : cy.addr), T2: isRd ? 'outputs ' + hex2(cy.good !== undefined ? cy.good : dv) : 'receives ' + hex2(dv), T3: isRd ? 'releases the bus' : 'stores ' + hex2(dv), post: 'not used', idle: 'not used' }[phase];
+  if (lab === 'TW') memSub = isRd ? 'still fetching the data' : 'still storing';
+  o += txt(95, 150, lab, 'bk-big', 'middle') + txt(95, 174, 'M' + (ci + 1) + ' ' + TYPE_NAME[cy.type], 'bk-s', 'middle') + txt(95, 194, cpuSub, 'bk-s', 'middle');
+  o += txt(620, 150, bi ? '' : 'address ' + hex4(io ? (lo << 8 | lo) : cy.addr), 'bk-s', 'middle') + txt(620, 174, memSub, 'bk-s', 'middle');
+  o += txt(345, 272, 'IO/<tspan class="ov">M</tspan> = ' + (bi ? 'x' : (io ? '1 (I/O)' : '0 (memory)')), 'bk-s', 'middle');
+  return o + '</svg>';
+}
+
+/* ---------- viva quiz ---------- */
+function rnd(a) { return a[Math.floor(Math.random() * a.length)]; }
+function rb() { return Math.floor(Math.random() * 256); }
+function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+var QWHY = {
+  OF: 'RD is low and IO/M is low (memory), and the cycle lasts 4 or more T-states. That is an opcode fetch (S1 S0 = 11).',
+  MR: 'RD is low and IO/M is low (memory), but the cycle lasts only 3 T-states. That is an ordinary memory read (S1 S0 = 10).',
+  MW: 'WR is low (not RD) and IO/M is low. That is a memory write (S1 S0 = 01).',
+  IOR: 'RD is low and IO/M is high, so the CPU is reading an I/O port (S1 S0 = 10).',
+  IOW: 'WR is low and IO/M is high, so the CPU is writing an I/O port (S1 S0 = 01).'
+};
+
+function makeQuiz() {
+  var kind = rnd(['type', 'type', 'addr', 'data']);
+  var type = kind === 'type' ? rnd(['OF', 'MR', 'MW', 'IOR', 'IOW']) : rnd(['OF', 'MR', 'MW']);
+  var io = type === 'IOR' || type === 'IOW';
+  var hi = rnd([0x00, 0x08, 0x20, 0x21, 0x40, 0x80, 0xC0, 0xF0, 0xFC]), lo = rb(), data = rb();
+  if (data === lo) data = (data + 0x35) & 255;
+  var addr = io ? ((lo << 8) | lo) : ((hi << 8) | lo);
+  var cy = { type: type, n: type === 'OF' ? rnd([4, 4, 6]) : 3, addr: addr, data: data, src: '', what: '' };
+  var q = { kind: kind, cy: cy, step: { cycles: [cy], mn: 'QUIZ', text: 'quiz' } };
+  var opts, correct;
+  if (kind === 'type') {
+    q.text = 'Which machine cycle is this? The labels are hidden. Use the control lines and count the T-states.';
+    opts = ['Opcode fetch', 'Memory read', 'Memory write', 'I/O read', 'I/O write']; correct = TYPE_NAME[type];
+    q.why = QWHY[type]; q.quiz = true;
+  } else if (kind === 'addr') {
+    q.text = 'Which address is the CPU accessing in this machine cycle?';
+    correct = hex4(addr);
+    var pool = [hex4((lo << 8) | hi), hex4(addr + 1), hex4(((hi ^ 0x10) << 8) | lo), hex4((hi << 8) | (lo ^ 0x80)), hex4(((hi + 1) << 8) | lo)];
+    opts = [correct]; pool.forEach(function (x) { if (opts.indexOf(x) < 0 && opts.length < 4) opts.push(x); });
+    q.why = 'A15–A8 carries the high byte (' + hex2(hi) + ') for the whole cycle. AD7–AD0 carries the low byte (' + hex2(lo) + ') in T1 while ALE is high. Together: ' + hex4(addr) + '.';
+  } else {
+    q.text = 'Which byte is on AD7–AD0 during T3?';
+    correct = hex2(data);
+    var p2 = [hex2(lo), hex2(data ^ 0xFF), hex2(data + 1), hex2(hi), hex2(data ^ 0x0F)];
+    opts = [correct]; p2.forEach(function (x) { if (opts.indexOf(x) < 0 && opts.length < 4) opts.push(x); });
+    q.why = 'In T1 these pins carry the low address byte (' + hex2(lo) + '). From T2 the same pins carry the data, so in T3 the byte is ' + hex2(data) + '.';
+  }
+  q.options = (kind === 'type') ? opts : shuffle(opts);
+  q.correct = correct;
+  return q;
+}
+/* ---------- app state and rendering ---------- */
+var $ = function (id) { return document.getElementById(id); };
+var S = { run: null, sel: 0, mhz: 3, shown: 0, ts: 0, play: null };
+var FAULTS = {
+  none: { label: 'None (healthy bus)', f: null, note: 'Faults change the bytes the CPU reads from the data bus. Bytes it writes are not corrupted in this model.' },
+  ad0gnd: { label: 'AD0 shorted to ground', f: { and: 0xFE, or: 0 }, note: 'Bit 0 of every byte read is forced to 0. MVI A, 05H is fetched as 3EH 05H but the operand arrives as 04H.' },
+  ad3vcc: { label: 'AD3 stuck at 1', f: { and: 0xFF, or: 0x08 }, note: 'Bit 3 of every byte read is forced to 1. HLT (76H) arrives as 7EH, which is MOV A, M, so the CPU runs on past the end of the program.' },
+  ad7gnd: { label: 'AD7 shorted to ground', f: { and: 0x7F, or: 0 }, note: 'Bit 7 of every byte read is forced to 0. ADD B (80H) arrives as NOP (00H) and a data byte such as FFH arrives as 7FH.' },
+  br12: { label: 'AD1 bridged to AD2', f: { and: 0xFF, or: 0, br: 6 }, note: 'Two lines shorted together act as a wired AND: if either is driven low, both read low. A byte with bit 1 or bit 2 set but not both loses that bit, so 02H reads as 00H.' },
+  float: { label: 'Memory disconnected (bus floats)', f: { and: 0, or: 255 }, note: 'The data bus floats high, so every read returns FFH. That is RST 7, which pushes PC and jumps to 0038H. That address also reads FFH, so the CPU loops forever and never halts.' }
+};
+function curOpts() { var k = $('fault').value; return { waits: +$('waits').value || 0, fault: (FAULTS[k] && FAULTS[k].f) || null, key: k }; }
+function waitTxt(w) { return w === 0 ? '0 wait' : (w + (w === 1 ? ' wait' : ' waits')); }
+var SHOW_MAX = 1000;
+var TYPE_COLOR = { OF: 'of', MR: 'mr', MW: 'mw', IO: 'io', BI: 'bi' };
+
+function readNum(str, dflt) { try { var v = evalExpr(String(str), {}, 0); return isFinite(v) ? v : dflt; } catch (e) { return dflt; } }
+function readMhz() { var v = parseFloat($('mhz').value); S.mhz = (v > 0 && v <= 100) ? v : 3; return S.mhz; }
+function fmtT(t) {
+  var us = t / S.mhz;
+  if (us >= 1000) return (us / 1000).toFixed(us >= 10000 ? 1 : 2) + ' ms';
+  return us.toFixed(us >= 100 ? 1 : 2) + ' µs';
+}
+function nf(n) { return Number(n).toLocaleString('en-US'); }
+
+function errHtml(errs) {
+  return errs.slice(0, 6).map(function (e) { return 'Line ' + e.ln + ': ' + esc(e.msg); }).join('<br>') + (errs.length > 6 ? '<br>and ' + (errs.length - 6) + ' more' : '');
+}
+
+function doRun() {
+  readMhz();
+  var inV = readNum($('inVal').value, 0x5A) & 255;
+  var o = curOpts();
+  var r = runProgram($('src').value, inV, o);
+  r.opts = o; S.run = r; S.sel = 0; stopPlay();
+  var msg = $('msg');
+  if (r.asm.errors.length) { msg.className = 'msg err'; msg.innerHTML = errHtml(r.asm.errors); clearResults(); return; }
+  if (!r.total) { msg.className = 'msg err'; msg.textContent = r.error; clearResults(); return; }
+  var t = r.total;
+  if (r.error) { msg.className = 'msg err'; msg.textContent = r.error; }
+  else if (t.capped) { msg.className = 'msg err'; msg.textContent = 'Stopped after ' + nf(t.n) + ' instructions without reaching HLT.' + (o.fault ? ' With this fault the CPU never reaches your HLT.' : ''); }
+  else { msg.className = 'msg ok'; msg.textContent = 'Assembled ' + r.asm.codeBytes + ' code bytes from ' + hex4(r.asm.start) + '. Ran ' + nf(t.n) + ' instructions and halted.' + (o.fault ? ' ' + nf(t.faults) + ' of them were corrupted by the fault.' : ''); }
+  S.shown = Math.min(r.trace.length, SHOW_MAX);
+  renderMetrics(); renderTrace(); renderMix(); select(0, true);
+}
+
+function clearResults() {
+  ['metrics', 'traceBody', 'scope', 'blockBox', 'mcs', 'regs', 'flags', 'memBox', 'outBox', 'mixBar', 'legend', 'topBody'].forEach(function (id) { $(id).innerHTML = ''; });
+  $('diagTitle').textContent = 'Timing diagram'; $('diagSub').textContent = ''; $('hwBanner').hidden = true; $('tsLabel').textContent = ''; $('traceNote').textContent = ''; $('mixNote').textContent = ''; $('stateAt').textContent = '';
+}
+
+function renderMetrics() {
+  var r = S.run, t = r.total, mc = 0, k;
+  for (k in t.types) mc += t.types[k].c;
+  var items = [[nf(t.n), 'instructions executed'], [nf(mc), 'machine cycles'], [nf(t.t), 'T-states'], [fmtT(t.t), 'run time at ' + S.mhz + ' MHz'], [nf(r.asm.codeBytes), 'code bytes']];
+  if (r.opts && r.opts.fault) items.push([nf(t.faults), 'instructions hit by the fault']);
+  $('metrics').innerHTML = items.map(function (m) { return '<div class="metric"><b>' + m[0] + '</b><span>' + m[1] + '</span></div>'; }).join('');
+}
+
+function chips(step) {
+  return step.cycles.map(function (c) { return '<span class="chip t-' + c.type + '" title="' + TYPE_NAME[c.type] + '">' + c.type + c.n + '</span>'; }).join('');
+}
+
+function renderTrace() {
+  var r = S.run, html = '';
+  for (var i = 0; i < S.shown; i++) {
+    var s = r.trace[i];
+    html += '<tr data-i="' + i + '"' + (s.faulted ? ' class="flt"' : '') + ' aria-selected="false"><td class="r">' + (i + 1) + '</td><td>' + hex4(s.pc) + '</td><td>' + esc(s.text) + '</td><td>' + s.bytes.map(h2).join(' ') + '</td><td>' + chips(s) + '</td><td class="r">' + s.t + '</td><td class="r">' + fmtT(s.t) + '</td></tr>';
+  }
+  $('traceBody').innerHTML = html;
+  $('traceNote').textContent = r.total.n > S.shown ? 'First ' + nf(S.shown) + ' of ' + nf(r.total.n) + ' shown. Totals cover every instruction.' : nf(r.total.n) + ' instructions';
+}
+
+function renderMix() {
+  var t = S.run.total, ty = t.types;
+  var groups = [
+    ['OF', 'Opcode fetch', ty.OF.c, ty.OF.t], ['MR', 'Memory read', ty.MR.c, ty.MR.t], ['MW', 'Memory write', ty.MW.c, ty.MW.t],
+    ['IO', 'I/O', ty.IOR.c + ty.IOW.c, ty.IOR.t + ty.IOW.t], ['BI', 'Bus idle', ty.BI.c, ty.BI.t]
+  ];
+  $('mixBar').innerHTML = groups.filter(function (g) { return g[3] > 0; }).map(function (g) {
+    return '<i style="--c:var(--' + TYPE_COLOR[g[0]] + ');width:' + (g[3] / t.t * 100).toFixed(2) + '%" title="' + g[1] + ': ' + g[3] + ' T"></i>';
+  }).join('');
+  $('legend').innerHTML = groups.filter(function (g) { return g[3] > 0; }).map(function (g) {
+    return '<span style="--c:var(--' + TYPE_COLOR[g[0]] + ')">' + g[1] + ': ' + nf(g[2]) + ' cycles, ' + nf(g[3]) + ' T (' + (g[3] / t.t * 100).toFixed(1) + '%)</span>';
+  }).join('');
+  $('mixNote').textContent = 'share of all T-states';
+  var rows = Object.keys(t.byMn).map(function (k) { return [k, t.byMn[k].c, t.byMn[k].t]; }).sort(function (a, b) { return b[2] - a[2]; }).slice(0, 8);
+  $('topBody').innerHTML = rows.map(function (x) { return '<tr><td class="mono">' + x[0] + '</td><td class="n">' + nf(x[1]) + '</td><td class="n">' + nf(x[2]) + '</td><td class="n">' + (x[2] / t.t * 100).toFixed(1) + '%</td></tr>'; }).join('');
+}
+
+function memAt(k) {
+  var m = new Uint8Array(S.run.asm.mem), tr = S.run.trace;
+  for (var i = 0; i <= k && i < tr.length; i++) tr[i].cycles.forEach(function (c) { if (c.type === 'MW') m[c.addr] = c.data; });
+  return m;
+}
+
+function select(i, noScroll) {
+  var r = S.run; if (!r || !r.trace.length) return;
+  i = Math.max(0, Math.min(S.shown - 1, i));
+  S.sel = i;
+  var rows = $('traceBody').children, k;
+  for (k = 0; k < rows.length; k++) rows[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
+  var row = rows[i], box = row && row.closest('.tracebox');
+  if (row && box && !noScroll) {
+    var top = row.offsetTop, bot = top + row.offsetHeight;
+    if (top < box.scrollTop + 32) box.scrollTop = Math.max(0, top - 32);
+    else if (bot > box.scrollTop + box.clientHeight) box.scrollTop = bot - box.clientHeight;
+  }
+  var step = r.trace[i], prev = i > 0 ? r.trace[i - 1].snap : r.snap0;
+  $('diagTitle').textContent = hex4(step.pc) + '  ' + step.text;
+  $('diagSub').textContent = step.t + ' T-states · ' + step.cycles.length + ' machine cycle' + (step.cycles.length > 1 ? 's' : '') + ' · ' + fmtT(step.t) + ' at ' + S.mhz + ' MHz';
+  var svg = buildDiagram(step);
+  $('scope').innerHTML = svg.replace(/(<svg[^>]*>)/, '$1<rect id="tcur" class="tcur" x="' + LBL + '" y="0" width="' + TW + '" height="100%"/>');
+  $('scope').scrollLeft = 0;
+  $('mcs').innerHTML = explain(step);
+  renderBanner(step);
+  S.ts = 0; renderBlock();
+  var m = memAt(i);
+  renderState(step.snap, prev, m, i);
+  renderMem(m, step);
+  var oc = step.outN, outs = r.out.slice(0, oc);
+  $('outBox').innerHTML = outs.length ? 'Output ports: ' + outs.map(function (o) { return '<span class="mono">' + hex2(o.port) + ' ← ' + hex2(o.val) + '</span>'; }).join(', ') : '';
+  $('bFirst').disabled = $('bPrev').disabled = i === 0;
+  $('bNext').disabled = $('bLast').disabled = i === S.shown - 1;
+}
+
+function renderBanner(step) {
+  var o = S.run.opts || { waits: 0, fault: null, key: 'none' }, p = [];
+  if (o.waits) p.push(o.waits + (o.waits === 1 ? ' wait state' : ' wait states') + ' added to every bus cycle (TW between T2 and T3)');
+  if (o.fault) p.push('fault: ' + FAULTS[o.key].label + (step.faulted ? '. This instruction was corrupted; wrong bytes are drawn in red' : '. This instruction was not affected'));
+  var b = $('hwBanner');
+  b.hidden = !p.length; b.className = 'banner' + (o.fault && step.faulted ? ' bad' : '');
+  b.textContent = p.join(' · ');
+}
+
+function renderBlock() {
+  var r = S.run; if (!r || !r.trace.length) { $('blockBox').innerHTML = ''; return; }
+  var step = r.trace[S.sel], list = flatT(step);
+  S.ts = Math.max(0, Math.min(list.length - 1, S.ts));
+  var f = list[S.ts], cy = step.cycles[f.ci];
+  $('blockBox').innerHTML = blockDiagram(step, f.ci, f.k);
+  $('tsLabel').textContent = 'T-state ' + (S.ts + 1) + ' of ' + list.length + ' · M' + (f.ci + 1) + ' ' + tl(f.k, cy.w || 0);
+  $('tPrev').disabled = S.ts === 0; $('tNext').disabled = S.ts === list.length - 1;
+  var cur = $('tcur'), sc = $('scope');
+  if (cur) {
+    var x = LBL + S.ts * TW; cur.setAttribute('x', x);
+    if (x < sc.scrollLeft + LBL || x + TW > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = Math.max(0, x - LBL - 20);
+  }
+}
+function stepT(d) { var r = S.run; if (!r || !r.trace.length) return; S.ts += d; renderBlock(); }
+function stopPlay() { if (S.play) { clearInterval(S.play); S.play = null; } var b = $('tPlay'); if (b) b.innerHTML = '&#9654; Play'; }
+function togglePlay() {
+  if (S.play) { stopPlay(); return; }
+  if (!S.run || !S.run.trace.length) return;
+  $('tPlay').innerHTML = '&#10074;&#10074; Pause';
+  S.play = setInterval(function () {
+    var n = flatT(S.run.trace[S.sel]).length;
+    if (S.ts < n - 1) { S.ts++; renderBlock(); }
+    else if (S.sel < S.shown - 1) select(S.sel + 1);
+    else stopPlay();
+  }, 650);
+}
+
+/* ---------- viva quiz ---------- */
+var Q = { q: null, score: 0, asked: 0, done: false };
+function newQuiz() {
+  Q.q = makeQuiz(); Q.done = false; var q = Q.q;
+  $('quizQ').textContent = q.text;
+  $('quizScope').innerHTML = buildDiagram(q.step, { quiz: !!q.quiz });
+  $('quizOpts').innerHTML = q.options.map(function (o) { return '<button class="qopt" data-o="' + esc(o) + '">' + esc(o) + '</button>'; }).join('');
+  $('quizFb').className = 'msg ok'; $('quizFb').innerHTML = '';
+  $('quizScore').textContent = Q.score + ' / ' + Q.asked + ' correct';
+}
+function answerQuiz(btn) {
+  if (Q.done || !Q.q) return; Q.done = true;
+  var q = Q.q, pick = btn.getAttribute('data-o'), ok = pick === q.correct;
+  Q.asked++; if (ok) Q.score++;
+  Array.prototype.forEach.call($('quizOpts').children, function (b) {
+    b.disabled = true;
+    if (b.getAttribute('data-o') === q.correct) b.classList.add('right'); else if (b === btn) b.classList.add('wrong');
+  });
+  $('quizScope').innerHTML = buildDiagram(q.step, {});
+  $('quizFb').className = 'msg ' + (ok ? 'ok' : 'err');
+  $('quizFb').innerHTML = '<b>' + (ok ? 'Correct.' : 'Not quite. The answer is ' + esc(q.correct) + '.') + '</b> ' + esc(q.why);
+  $('quizScore').textContent = Q.score + ' / ' + Q.asked + ' correct';
+}
+
+function renderState(sn, pv, m, i) {
+  var hl = (sn.H << 8) | sn.L;
+  var cells = [['A', hex2(sn.A), sn.A !== pv.A], ['B', hex2(sn.B), sn.B !== pv.B], ['C', hex2(sn.C), sn.C !== pv.C], ['D', hex2(sn.D), sn.D !== pv.D],
+    ['E', hex2(sn.E), sn.E !== pv.E], ['H', hex2(sn.H), sn.H !== pv.H], ['L', hex2(sn.L), sn.L !== pv.L], ['M (at HL)', hex2(m[hl]), false]];
+  var h = cells.map(function (c) { return '<div class="reg' + (c[2] ? ' ch' : '') + '"><span>' + c[0] + '</span><b>' + c[1] + '</b></div>'; }).join('');
+  h += '<div class="reg w2' + (sn.SP !== pv.SP ? ' ch' : '') + '"><span>SP</span><b>' + hex4(sn.SP) + '</b></div>';
+  h += '<div class="reg w2' + (sn.PC !== pv.PC ? ' ch' : '') + '"><span>PC (next)</span><b>' + hex4(sn.PC) + '</b></div>';
+  $('regs').innerHTML = h;
+  $('flags').innerHTML = ['S', 'Z', 'AC', 'P', 'CY'].map(function (f) { return '<span class="flag' + (sn[f] ? ' on' : '') + '">' + f + ' ' + sn[f] + '</span>'; }).join('');
+  $('stateAt').textContent = 'after #' + (i + 1);
+}
+
+function renderMem(m, step) {
+  var base = readNum($('memAddr').value, 0x2000) & 0xFFF8, wr = {};
+  step.cycles.forEach(function (c) { if (c.type === 'MW') wr[c.addr] = 1; });
+  var h = '<table><tbody>';
+  for (var r = 0; r < 12; r++) {
+    var a = (base + r * 8) & 0xFFFF;
+    h += '<tr style="cursor:default"><td class="a">' + hex4(a).slice(0, 4) + '</td>';
+    for (var c = 0; c < 8; c++) { var ad = (a + c) & 0xFFFF; h += '<td' + (wr[ad] ? ' class="w"' : '') + '>' + h2(m[ad]) + '</td>'; }
+    h += '</tr>';
+  }
+  $('memBox').innerHTML = h + '</tbody></table>';
+}
+
+/* ---------- compare ---------- */
+function runCompare() {
+  readMhz();
+  var inV = readNum($('inVal').value, 0x5A) & 255;
+  var cw = { waits: +$('waits').value || 0, fault: null };
+  var a = runProgram($('progA').value, inV, cw), b = runProgram($('progB').value, inV, cw), msgs = [];
+  [['A', a], ['B', b]].forEach(function (p) {
+    if (p[1].asm.errors.length) msgs.push('Program ' + p[0] + ': ' + errHtml(p[1].asm.errors));
+    else if (!p[1].total) msgs.push('Program ' + p[0] + ': ' + esc(p[1].error));
+    else if (p[1].error) msgs.push('Program ' + p[0] + ': ' + esc(p[1].error));
+    else if (!p[1].total.halted) msgs.push('Program ' + p[0] + ' did not reach HLT.');
+  });
+  var m = $('cmpMsg');
+  if (msgs.length) { m.className = 'msg err'; m.innerHTML = msgs.join('<br>'); $('cmpOut').innerHTML = ''; return; }
+  m.className = 'msg ok'; m.textContent = cw.waits ? 'Memory delay from the Bus timing tab applies: ' + cw.waits + (cw.waits === 1 ? ' wait state' : ' wait states') + ' per bus cycle.' : '';
+  var ta = a.total, tb = b.total;
+  function mcs(t) { var n = 0, k; for (k in t.types) n += t.types[k].c; return n; }
+  function row(label, va, vb, fmt, lowerBetter) {
+    var d = vb - va, pct = va ? d / va * 100 : 0;
+    var delta = d === 0 ? 'same' : (d > 0 ? '+' : '−') + Math.abs(pct).toFixed(1) + '%';
+    return '<tr><td>' + label + '</td><td class="n">' + fmt(va) + '</td><td class="n">' + fmt(vb) + '</td><td class="n">' + delta + '</td></tr>';
+  }
+  var id = function (v) { return nf(v); };
+  var tbl = '<table class="cmp"><thead><tr><th>Metric</th><th class="r">A</th><th class="r">B</th><th class="r">B vs A</th></tr></thead><tbody>' +
+    row('Instructions executed', ta.n, tb.n, id) + row('Machine cycles', mcs(ta), mcs(tb), id) + row('T-states', ta.t, tb.t, id) +
+    row('Run time at ' + S.mhz + ' MHz', ta.t, tb.t, function (v) { return fmtT(v); }) + row('Code size (bytes)', a.asm.codeBytes, b.asm.codeBytes, id) + '</tbody></table>';
+  var verdict;
+  if (ta.t === tb.t) verdict = 'Both programs take ' + nf(ta.t) + ' T-states.';
+  else {
+    var fast = ta.t < tb.t ? 'A' : 'B', fa = Math.min(ta.t, tb.t), sl = Math.max(ta.t, tb.t);
+    verdict = 'Program ' + fast + ' finishes in ' + nf(fa) + ' T-states against ' + nf(sl) + ', which is ' + ((sl - fa) / sl * 100).toFixed(1) + '% fewer and saves ' + fmtT(sl - fa) + ' at ' + S.mhz + ' MHz.';
+    var sa = a.asm.codeBytes, sb = b.asm.codeBytes;
+    if (sa !== sb) { var small = sa < sb ? 'A' : 'B'; verdict += ' Program ' + small + ' is the smaller one at ' + Math.min(sa, sb) + ' bytes against ' + Math.max(sa, sb) + '.'; }
+  }
+  function mix(t) {
+    var g = [['of', 'OF', t.types.OF.t], ['mr', 'MR', t.types.MR.t], ['mw', 'MW', t.types.MW.t], ['io', 'IO', t.types.IOR.t + t.types.IOW.t], ['bi', 'BI', t.types.BI.t]].filter(function (x) { return x[2] > 0; });
+    return '<div class="mixbar">' + g.map(function (x) { return '<i style="--c:var(--' + x[0] + ');width:' + (x[2] / t.t * 100).toFixed(2) + '%" title="' + x[1] + ': ' + x[2] + ' T"></i>'; }).join('') + '</div>';
+  }
+  $('cmpOut').innerHTML = '<div class="card"><header><h2>Result</h2></header><p class="verdict">' + verdict + '</p><div style="overflow-x:auto;margin-top:10px">' + tbl + '</div></div>' +
+    '<div class="two"><div class="card"><header><h2>Program A cycle mix</h2></header>' + mix(ta) + '</div><div class="card"><header><h2>Program B cycle mix</h2></header>' + mix(tb) + '</div></div>' +
+    '<div class="legend card" style="margin:0"><span style="--c:var(--of)">Opcode fetch</span><span style="--c:var(--mr)">Memory read</span><span style="--c:var(--mw)">Memory write</span><span style="--c:var(--io)">I/O</span><span style="--c:var(--bi)">Bus idle</span></div>';
+}
+
+/* ---------- about ---------- */
+function renderAbout() {
+  $('aboutBox').innerHTML =
+    '<h2>The problem</h2>' +
+    '<p>Every 8085 course teaches bus timing: opcode fetch, memory read, memory write, T-states, and what ALE, <span class="ov">RD</span>, <span class="ov">WR</span> and IO/<span class="ov">M</span> do in each one. It is taught from static textbook figures, one instruction at a time. Typical student simulators concentrate on registers, flags and memory after each instruction, so the connection between a program and what happens on the pins is left to the student to imagine.</p>' +
+    '<h2>What BusScope does</h2>' +
+    '<ul><li>Assembles 8085 source and executes it, recording the machine cycles of every instruction that runs.</li>' +
+    '<li>Draws the timing diagram of any executed instruction: CLK, A15–A8, AD7–AD0, ALE, <span class="ov">RD</span>, <span class="ov">WR</span>, IO/<span class="ov">M</span>, S1, S0, with each T-state labelled and explained.</li>' +
+    '<li>Totals T-states and run time for a whole program at any clock frequency, and shows which instructions and which cycle types consume the time.</li>' +
+    '<li>Compares two programs that do the same job, so speed against code size becomes a measured result.</li>' +
+    '<li>Lets you slow the memory down with the READY pin: each wait state inserts a TW between T2 and T3 of every bus cycle, and the totals update.</li>' +
+    '<li>Injects data bus faults (a line shorted to ground, stuck high, two lines bridged, or memory disconnected so the bus floats to FFH) and shows the wrong byte in red, the wrong opcode that executes, and the effect on the program.</li>' +
+    '<li>Draws a circuit view of the CPU, the 74LS373 address latch and memory, animated one T-state at a time and tied to the timing diagram.</li>' +
+    '<li>Has a viva quiz that shows a random waveform with labels hidden and asks which cycle it is, which address, or which byte.</li></ul>' +
+    '<h2>Method</h2>' +
+    '<ul><li>Each opcode maps to a sequence of machine cycles: opcode fetch (4, 5 or 6 T-states), memory read or write (3), I/O read or write (3), and bus idle (3, used by DAD).</li>' +
+    '<li>Conditional instructions use their taken and not-taken cycle sequences, for example JNZ is 10 T-states taken and 7 not taken, CALL is 18 and 9, RET is 12 and 6.</li>' +
+    '<li>Waveforms follow the standard multiplexed-bus pattern: the low address byte is on AD7–AD0 in T1 with ALE high, data moves in T2 and T3, and <span class="ov">RD</span> or <span class="ov">WR</span> is low for T2 and T3.</li>' +
+    '<li>Time per T-state is the reciprocal of the CPU clock (3 MHz gives 0.333 µs).</li>' +
+    '<li>Wait states are added to every opcode fetch, memory and I/O cycle, but not to the internal bus-idle cycles of DAD. The CPU holds RD or WR and the buses unchanged while READY is low.</li>' +
+    '<li>RST n pushes the PC (12 T-states) and jumps to n × 8, so RST 7 goes to 0038H. The floating-bus fault assumes the data bus reads FFH, as it does with pull-ups on the lines.</li></ul>' +
+    '<h2>Assumptions and limits</h2>' +
+    '<ul><li>The diagram is idealised. Edges sit on T-state boundaries and propagation delay, setup and hold times are not drawn.</li>' +
+    '<li>Not modelled: HOLD/HLDA (DMA), hardware interrupts (INTR, TRAP, RST 5.5 to 7.5) and the INTA cycle. The RST instruction works, but no interrupt pin does. RIM and SIM exist as simple stubs.</li>' +
+    '<li>Faults corrupt the bytes the CPU reads; writes are stored as the CPU intended. The faults are logical models (stuck bits, wired-AND), not electrical simulation.</li>' +
+    '<li>SP starts at FFFFH. Set it with LXI SP before using CALL or PUSH. IN returns the value in the box beside the Run button.</li>' +
+    '<li>During bus-idle cycles IO/<span class="ov">M</span>, S1 and S0 are shown hatched, meaning not meaningful.</li></ul>' +
+    '<h2>Source syntax</h2>' +
+    '<p>Labels end with a colon. Numbers can be 25H, 0x25, 37 or 00100101B. Directives: ORG, DB, DW, EQU, END. Execution starts at the first instruction in the source. Comments start with a semicolon.</p>' +
+    '<h2>Verification</h2>' +
+    '<p>An automated test checks the machine-cycle sequence and T-state total of about fifty instruction forms, including taken and not-taken branches, against the standard 8085 timing table (for example LDA 13, CALL 18, PUSH 12, DAD 10, XTHL 16). Nine sample programs were run to confirm their results, such as the block copy, the stack round trip, and BCD addition with DAA.</p>';
+}
+
+/* ---------- wiring ---------- */
+function setTab(name) {
+  if (name !== 'Trace') stopPlay();
+  [['Trace', 'viewTrace'], ['Compare', 'viewCompare'], ['Quiz', 'viewQuiz'], ['About', 'viewAbout']].forEach(function (p) {
+    var on = p[0] === name;
+    $('tab' + p[0]).setAttribute('aria-selected', on ? 'true' : 'false');
+    $(p[1]).hidden = !on;
+  });
+}
+
+function init() {
+  var sel = $('exSel');
+  sel.innerHTML = EXAMPLES.map(function (e, i) { return '<option value="' + i + '">' + esc(e.name) + '</option>'; }).join('');
+  $('src').value = EXAMPLES[0].src;
+  sel.addEventListener('change', function () { $('src').value = EXAMPLES[+sel.value].src; $('memAddr').value = '2000H'; doRun(); });
+  var ps = $('pairSel');
+  ps.innerHTML = PAIRS.map(function (e, i) { return '<option value="' + i + '">' + esc(e.name) + '</option>'; }).join('');
+  function loadPair() { var p = PAIRS[+ps.value]; $('progA').value = p.a; $('progB').value = p.b; runCompare(); }
+  ps.addEventListener('change', loadPair);
+  $('cmpRun').addEventListener('click', runCompare);
+  $('runBtn').addEventListener('click', doRun);
+  $('mhz').addEventListener('change', function () { if (S.run && S.run.total) { readMhz(); renderMetrics(); renderTrace(); select(S.sel, true); if (!$('viewCompare').hidden && $('cmpOut').innerHTML) runCompare(); } });
+  $('memAddr').addEventListener('change', function () { if (S.run && S.run.total) select(S.sel, true); });
+  $('traceBody').addEventListener('click', function (e) { var tr = e.target.closest('tr'); if (tr) select(+tr.getAttribute('data-i')); });
+  $('bFirst').addEventListener('click', function () { select(0); });
+  $('bPrev').addEventListener('click', function () { select(S.sel - 1); });
+  $('bNext').addEventListener('click', function () { select(S.sel + 1); });
+  $('bLast').addEventListener('click', function () { select(S.shown - 1); });
+  $('tabTrace').addEventListener('click', function () { setTab('Trace'); });
+  $('tabCompare').addEventListener('click', function () { setTab('Compare'); if (!$('cmpOut').innerHTML) loadPair(); });
+  $('tabQuiz').addEventListener('click', function () { setTab('Quiz'); if (!Q.q) newQuiz(); });
+  $('tabAbout').addEventListener('click', function () { setTab('About'); });
+  $('quizOpts').addEventListener('click', function (e) { var b = e.target.closest('.qopt'); if (b) answerQuiz(b); });
+  $('quizNext').addEventListener('click', newQuiz);
+  $('tPrev').addEventListener('click', function () { stopPlay(); stepT(-1); });
+  $('tNext').addEventListener('click', function () { stopPlay(); stepT(1); });
+  $('tPlay').addEventListener('click', togglePlay);
+  var fs = $('fault');
+  fs.innerHTML = Object.keys(FAULTS).map(function (k) { return '<option value="' + k + '">' + esc(FAULTS[k].label) + '</option>'; }).join('');
+  function hwText() {
+    var w = +$('waits').value;
+    $('waitsOut').textContent = waitTxt(w);
+    $('waitsNote').textContent = w === 0 ? 'Memory keeps up with the CPU. Raise the delay to make it too slow: the CPU pulls READY low and idles in TW states.' : 'Memory is too slow: it holds READY low, so each bus cycle gains ' + w + ' idle clock' + (w === 1 ? '' : 's') + ' (TW) between T2 and T3.';
+    $('faultNote').textContent = FAULTS[fs.value].note;
+  }
+  $('waits').addEventListener('input', hwText);
+  $('waits').addEventListener('change', function () { hwText(); doRun(); });
+  fs.addEventListener('change', function () { hwText(); doRun(); });
+  hwText();
+  document.addEventListener('keydown', function (e) {
+    var tg = e.target.tagName;
+    if (tg === 'TEXTAREA' || tg === 'INPUT' || tg === 'SELECT' || $('viewTrace').hidden) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); select(S.sel + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); select(S.sel - 1); }
+  });
+  renderAbout();
+  doRun();
+}
+init();
+</script>
+
+</body></html>
