@@ -1,6 +1,6 @@
 # BusScope 8085
 
-BusScope is a browser-based learning tool for exploring how supported 8085 assembly instructions translate into machine cycles and bus activity. It pairs instruction execution with a timing diagram, so the relationship between the program and signals on the bus is visible step by step.
+BusScope 8085 is an AI-assisted educational prototype for exploring how supported 8085 assembly instructions translate into machine cycles and bus activity. It pairs instruction execution with a timing diagram, making the relationship between a program and bus signals visible step by step. Review the implementation and timing behavior before treating it as an authoritative reference.
 
 ## What it shows
 
